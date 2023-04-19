@@ -4,6 +4,15 @@ import matplotlib.pyplot as plt
 import os
 import shutil
 from tqdm import tqdm
+import argparse
+
+def parse_args():
+    parse = argparse.ArgumentParser(description='Generate random graphs.')
+    parse.add_argument('--num_er', type=int, default=50, help='number of ER graph.')
+    parse.add_argument('--num_sbm', type=int, default=50, help='number of SBM graph.')
+    args = parse.parse_args()
+    return args
+
 
 def generate_erdos_renyi_graph(save_dir='graphs/erdos_renyi', num = 500, n_range=[100,1000], p=0.1):
     if os.path.exists(save_dir):
@@ -36,6 +45,7 @@ def generate_sbm_graph(save_dir='graphs/sbm', num_graphs=500, num_blocks=2, node
         
 
 if __name__ == "__main__":
-    generate_erdos_renyi_graph(num=500)
-    generate_sbm_graph(num_graphs=500)
+    args = parse_args()
+    generate_erdos_renyi_graph(num=args.num_er)
+    generate_sbm_graph(num_graphs=args.num_sbm)
     
