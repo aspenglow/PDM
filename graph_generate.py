@@ -35,3 +35,7 @@ def generate_sbm_graph(save_dir='graphs/sbm', num_graphs=500, num_blocks=2, node
         nx.write_gpickle(g, os.path.join(save_dir, "sbm"+str(i+1)+".pkl"))
         
 
+if __name__ == "__main__":
+    generate_erdos_renyi_graph(num=500)
+    generate_sbm_graph(num_graphs=500)
+    
