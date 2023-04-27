@@ -50,6 +50,10 @@ tt = tictoc()
 # log path
 log_path = args.log_path
 
+# layout save dir
+layout_dir = args.layout_dir 
+os.makedirs(layout_dir, exist_ok=True)
+
 # introduce graphs
 data_dir = args.data_dir
 graphs_num = args.graph_num
@@ -78,7 +82,7 @@ for f in tqdm(files, leave=False):
     # model
     def init_weights(m):
         if type(m) == nn.Linear:
-            torch.nn.init.xavier_uniform(m.weight, gain= N**(1/layout_dim))
+            torch.nn.init.xavier_uniform_(m.weight, gain= N**(1/layout_dim))
             
 
     #loss function
@@ -87,7 +91,7 @@ for f in tqdm(files, leave=False):
     k = 1
         
     #stopping
-    stop_delta_ratio = 1e-4
+    stop_delta_ratio = 1e-3
 
     #optimizer    
         
@@ -97,7 +101,7 @@ for f in tqdm(files, leave=False):
     time_hist_lin = []
     hist = []
 
-    for i in tqdm(range(10), leave=False):
+    for i in tqdm(range(args.train_num), leave=False):
         net = nn.Linear(N, layout_dim, bias=False)
         net.to(device)
         net.apply(init_weights)
@@ -151,23 +155,26 @@ for f in tqdm(files, leave=False):
         # energy_hist_lin += [energy(outputsLin).detach().cpu().numpy()]
         # print(loss, " ", energy(outputsLin).detach().cpu().numpy())
         write_log(log_path, 'Finished training ' + str(i) + ' epoch: ' + str(epoch) + ' time: ' + str(tt.toc()) + ' energy: ' + str(energy_hist_lin[-1]) + "\n")
-        print('Finished training '+ str(i) + ' epoch: ' + str(epoch) + ' time: ' + str(tt.toc()) + ' energy: ' + str(energy_hist_lin[-1]))
+        # print('Finished training '+ str(i) + ' epoch: ' + str(epoch) + ' time: ' + str(tt.toc()) + ' energy: ' + str(energy_hist_lin[-1]))
         
         if energy_hist_lin[-1] < lowest_energy:
             write_log(log_path, "Better result with energy: " + str(energy_hist_lin[-1]) + "\n")
             lowest_energy = energy_hist_lin[-1]
             best_outputs = outputsLin
-      
+    
+    graph_name = f.split('.')[0]
+    torch.save(best_outputs, os.path.join(layout_dir, graph_name + '.pt'))
+    
     if args.csv_dir is not None:    
         d = pd.DataFrame(energy_hist_lin)
-        d.to_csv(os.path.join(args.csv_dir, f.split('.')[0] + '_energy_fdl.csv'), header=True,index=False)
+        d.to_csv(os.path.join(args.csv_dir, graph_name + '_energy_fdl.csv'), header=True,index=False)
 
         d = pd.DataFrame(time_hist_lin)
-        d.to_csv(os.path.join(args.csv_dir, f.split('.')[0] + '_time_fdl.csv'), header=True,index=False)
+        d.to_csv(os.path.join(args.csv_dir, graph_name + '_time_fdl.csv'), header=True,index=False)
 
         d = pd.DataFrame(hist)
-        d.to_csv(os.path.join(args.csv_dir, f.split('.')[0] + '_loss_fdl.csv'), header=True,index=False)
+        d.to_csv(os.path.join(args.csv_dir, graph_name + '_loss_fdl.csv'), header=True,index=False)
 
         d = pd.DataFrame(best_outputs.detach().cpu().numpy())
-        d.to_csv(os.path.join(args.csv_dir, f.split('.')[0] + '_output_fdl.csv'), header=True,index=False)
+        d.to_csv(os.path.join(args.csv_dir, graph_name + '_output_fdl.csv'), header=True,index=False)
 

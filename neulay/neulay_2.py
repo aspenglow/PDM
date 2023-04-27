@@ -50,6 +50,10 @@ tt = tictoc()
 # log path
 log_path = args.log_path
 
+# layout save dir
+layout_dir = args.layout_dir 
+os.makedirs(layout_dir, exist_ok=True)
+
 # import graphs
 data_dir = args.data_dir
 graphs_num = args.graph_num
@@ -111,7 +115,7 @@ for f in tqdm(files, leave=False):
     output_ = []
 
 
-    for i in tqdm(range(10), leave=False):
+    for i in tqdm(range(args.train_num), leave=False):
         net = LayoutNet(num_nodes=N, output_dim=layout_dim, hidden_dim_1=100, hidden_dim_2=100, hidden_dim_3=3, adj_mtx= DAD)
         net.to(device)
         
@@ -205,19 +209,22 @@ for f in tqdm(files, leave=False):
             write_log(log_path, "Better result with energy: " + str(energy_hist[-1]) + "\n")
             lowest_energy = energy_hist[-1]
             best_outputs = outputs1
+        
+    graph_name = f.split('.')[0]
+    torch.save(best_outputs, os.path.join(layout_dir, graph_name + '.pt'))
             
     if args.csv_dir is not None:    
         d = pd.DataFrame(energy_hist)
-        d.to_csv(os.path.join(args.csv_dir, f.split('.')[0] + '_energy_neulay.csv'), header=True,index=False)
+        d.to_csv(os.path.join(args.csv_dir, graph_name + '_energy_neulay.csv'), header=True,index=False)
 
         d = pd.DataFrame(time_hist)
-        d.to_csv(os.path.join(args.csv_dir, f.split('.')[0] + '_time_neulay.csv'), header=True,index=False)
+        d.to_csv(os.path.join(args.csv_dir, graph_name + '_time_neulay.csv'), header=True,index=False)
 
         d = pd.DataFrame(hist)
-        d.to_csv(os.path.join(args.csv_dir, f.split('.')[0] + '_loss_neulay.csv'), header=True,index=False)
+        d.to_csv(os.path.join(args.csv_dir, graph_name + '_loss_neulay.csv'), header=True,index=False)
 
         d = pd.DataFrame(best_outputs.detach().cpu().numpy())
-        d.to_csv(os.path.join(args.csv_dir, f.split('.')[0] + '_output_neulay.csv'), header=True,index=False)
+        d.to_csv(os.path.join(args.csv_dir, graph_name + '_output_neulay.csv'), header=True,index=False)
 
 
 
