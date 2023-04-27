@@ -45,6 +45,23 @@ def Distances_kdtree(X, pairs):
 def difference(r):
     return (max(r)-min(r))/max(r)
 
+#energy
+def energy(output, adjacency_list, N):    
+    X = output
+
+    X1 = X[adjacency_list[0]] 
+    X2 = X[adjacency_list[1]] 
+
+    radius = .4
+    magnitude = 100*N**(1/3)*radius
+    k = 1
+        
+    V_el = (k/2)*torch.sum( torch.sum((X1-X2)**2, axis = -1))
+    r = X[...,np.newaxis,:] - X[...,np.newaxis,:,:]
+    r2_len = torch.sum(r**2, axis = -1)
+    V_nn = magnitude * torch.sum(torch.exp(-r2_len /4/(radius**2) ) ) 
+    return V_el + V_nn
+
 def early_stopping(metric_list,
             small_window = 32,
             big_window = 1000,

@@ -13,286 +13,211 @@ import math
 import sys
 sys.path.append(os.getcwd())
 from neulay.neulay_utils import *
+from neulay.neulay_model import *
 
-#device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+import argparse
+parser = argparse.ArgumentParser(
+    'Force-Directed Layout algorithm to calculate final layout given a graph.')
+parser.add_argument('--data-dir', type=str, default="graphs/erdos_renyi",
+                    help='Path to load graphs.')
+parser.add_argument('--graph-num', type=int, default=5,
+                    help='Number of graph to train. -1 means load all of graphs in data-dir.')
+parser.add_argument('--layout-dir', type=str, default="layouts/erdos_renyi",
+                    help='Path to save trained graph layouts.')
+parser.add_argument('--layout_dim', type=int, default=3,
+                    help='Dimension of graph layout.')
+parser.add_argument('--log-path', type=str, default="neulay/log_fdl.txt",
+                    help='Path to save training log.')
+parser.add_argument('--csv-dir', type=str, default=None,
+                    help='Path to save results of loss and time.')
+parser.add_argument('--train-num', type=int, default=5,
+                    help='Number of training per graph, then save the layout with lowest loss.')
+parser.add_argument('--stop-delta-ratio', type=int, default=1e-4,
+                    help='A parameter to early stop the training.')
+parser.add_argument('--use-gpu', type=bool, default=True,
+                    help='Use gpu to  training.')
+args = parser.parse_args()
+
+if args.use_gpu:
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+else:
+    device = 'cpu'
   
+# measure time
 tt = tictoc()
 
 # log path
-log_path = "neulay/log_neulay.txt"
+log_path = args.log_path
 
-# import a graph
-data_dir = "graphs/erdos_renyi"
-files = os.listdir(data_dir)[:10]
-f = files[0]
-G = nx.read_gpickle(os.path.join(data_dir, f))
-A = nx.to_numpy_matrix(G)
-N = len(A)
-
-A = sp.coo_matrix(A)
-
-adjacency_list = (torch.LongTensor(sp.triu(A, k=1).row), torch.LongTensor(sp.triu(A, k=1).col))
-#adjacency_list = torch.where(torch.triu(torch.tensor(A)))
-
-#propagation rule
-
-#Adj =  A + np.eye(N)  #Laplacian mtx
-#deg = np.diag(np.array(1/np.sqrt(Adj.sum(0)))[0,:]) # degree mtx
-#DAD = np.dot(deg, np.dot(Adj, deg))
-A_norm = A + sp.eye(N)
-D_norm = sp.diags((1/np.sqrt(A_norm.sum(0))).tolist()[0])
-D_norm = D_norm.tocsr()
-DAD = D_norm.dot(A_norm.dot(D_norm))
-DAD = DAD.tocoo()
-
-DAD = sparse_mx_to_torch_sparse_tensor(DAD)
-
-
-
+# import graphs
+data_dir = args.data_dir
+graphs_num = args.graph_num
+if graphs_num == -1:
+    files = os.listdir(data_dir)
+else:
+    files = os.listdir(data_dir)[:graphs_num]
     
-class GCN(nn.Module):
-    def __init__(self, input_dim, output_dim, adj_mx):
-        super(GCN, self).__init__()
-        self.input_dim = input_dim
-        self.adj_mx = adj_mx.to(device)
-        self.output_dim = output_dim
-        #self.dense = nn.Linear(input_dim, output_dim,bias=False)
-        self.weight = torch.nn.Parameter(torch.nn.init.xavier_uniform_(torch.FloatTensor(self.input_dim, self.output_dim), gain= N**(1/dim)).to(device))
-        #torch.nn.Parameter(torch.rand(self.input_dim, self.output_dim)) #
-    def reset_parameters(self):
-        stdv = 1. / math.sqrt(self.weight.size(1))
-        self.weight.data.uniform_(-stdv, stdv)
-        
-    def forward(self, input):
-        support = torch.spmm(input, self.weight)
-        output = torch.spmm(self.adj_mx, support)
-        
-        return output
-        
-        
-        return x
-    
-class LayoutNet(nn.Module):
-    def __init__(self, num_nodes, output_dim, hidden_dim_1, hidden_dim_2, hidden_dim_3,adj_mtx):
-        super(LayoutNet, self).__init__()
-        self.num_nodes = num_nodes
-        self.output_dim = output_dim
-        self.hidden_dim_1 = hidden_dim_1
-        self.hidden_dim_2 = hidden_dim_2
-        self.hidden_dim_3 = hidden_dim_3
-        self.adj_mtx = adj_mtx
-        
-        #self.dense1 = nn.Linear(self.num_nodes, self.hidden_dim_1, bias= False)
-        self.weight1 = torch.nn.Parameter(torch.nn.init.xavier_uniform_(torch.FloatTensor(self.num_nodes, self.hidden_dim_1), gain= N**(1/dim)).to(device))
-        #torch.nn.Parameter(torch.rand(self.num_nodes, self.hidden_dim_1))#
-        self.GCN1 = GCN(self.hidden_dim_1, self.hidden_dim_2,self.adj_mtx.float()).to(device)
-        
-        #self.leakyrelu = nn.LeakyReLU(0.2)
-        self.tanh1 = nn.Tanh().to(device)
-        #self.sigmoid = nn.Sigmoid()
-        
-        self.GCN2 = GCN(self.hidden_dim_2, self.hidden_dim_3, self.adj_mtx.float()).to(device)
-       
-        self.weight2 = torch.nn.Parameter(torch.nn.init.xavier_uniform_(torch.FloatTensor((self.hidden_dim_1 + self.hidden_dim_2 + self.hidden_dim_3), self.output_dim), gain= N**(1/dim)).to(device))
-        #torch.nn.Parameter(torch.rand((self.hidden_dim_1 + self.hidden_dim_2+ self.hidden_dim_3), self.output_dim)) #
-       
-        #self.dense2 = nn.Linear((self.hidden_dim_1 + self.hidden_dim_2+ self.hidden_dim_3), self.output_dim, bias= False)
-       
- 
-    def forward(self, inp):
-        x = torch.spmm(inp, self.weight1)
-        #x = self.dense1(inp)
+for f in tqdm(files, leave=False):
+    G = nx.read_gpickle(os.path.join(data_dir, f))
+    A = nx.to_numpy_matrix(G)
+    N = len(A)
 
-        gnn1 = self.GCN1(x)
-        
-        #gnn1 = self.leakyrelu(gnn1)
-        gnn1 = self.tanh1(gnn1)
-        #gnn1 = self.sigmoid(gnn1)
-        
-        gnn2 = self.GCN2(gnn1)
-        
-        
-        output = torch.cat((x,gnn1,gnn2),1)
-        
-        #output = self.dense2(output)
-        output = torch.spmm(output, self.weight2)
-    
-        
-        return  output
+    A = sp.coo_matrix(A)
 
-class LayoutLinear(nn.Module):
-    def __init__(self, weight):
-        super(LayoutLinear, self).__init__()
-        self.weight = weight
-        
-    def forward(self, inp):
-        x = torch.spmm(inp, self.weight)
-        
-        return  x
-    
+    adjacency_list = (torch.LongTensor(sp.triu(A, k=1).row), torch.LongTensor(sp.triu(A, k=1).col))
+    #adjacency_list = torch.where(torch.triu(torch.tensor(A)))
 
-#input, output dimensions
-dim = 3 
-#x = torch.eye(N) #.to(device)
-x = sp.eye(N)
-x = x.tocoo()
-x = sparse_mx_to_torch_sparse_tensor(x)
+    #propagation rule
 
-# model
-def init_weights(m):
-    if type(m) == nn.Linear:
-        torch.nn.init.xavier_uniform_(m.weight, gain= N**(1/dim))
+    #Adj =  A + np.eye(N)  #Laplacian mtx
+    #deg = np.diag(np.array(1/np.sqrt(Adj.sum(0)))[0,:]) # degree mtx
+    #DAD = np.dot(deg, np.dot(Adj, deg))
+    A_norm = A + sp.eye(N)
+    D_norm = sp.diags((1/np.sqrt(A_norm.sum(0))).tolist()[0])
+    D_norm = D_norm.tocsr()
+    DAD = D_norm.dot(A_norm.dot(D_norm))
+    DAD = DAD.tocoo()
 
-#loss function
-radius = .4
-magnitude = 100*N**(1/3)*radius
-k = 1
+    DAD = sparse_mx_to_torch_sparse_tensor(DAD)
 
-def custom_loss(output, Dist):
-    X = output
-    X1 = X[adjacency_list[0]] 
-    X2 = X[adjacency_list[1]] 
-        
-    V_el = (k/2)*torch.sum( torch.sum((X1-X2)**2, axis = -1))
-    V_nn = magnitude * torch.sum(torch.exp(-Dist/4/(radius**2)))
-   
-    return V_el + V_nn
-    
-    
-#energy
+    #input, output dimensions
+    layout_dim = args.layout_dim
+    #x = torch.eye(N) #.to(device)
+    x = sp.eye(N)
+    x = x.tocoo()
+    x = sparse_mx_to_torch_sparse_tensor(x)
 
-def energy(output):    
-    X = output
+    # model
+    def init_weights(m):
+        if type(m) == nn.Linear:
+            torch.nn.init.xavier_uniform_(m.weight, gain= N**(1/layout_dim))
 
-    X1 = X[adjacency_list[0]] 
-    X2 = X[adjacency_list[1]] 
-        
-    V_el = (k/2)*torch.sum( torch.sum((X1-X2)**2, axis = -1))
-    r = X[...,np.newaxis,:] - X[...,np.newaxis,:,:]
-    r2_len = torch.sum(r**2, axis = -1)
-    V_nn = magnitude * torch.sum(torch.exp(-r2_len /4/(radius**2) ) ) 
-    return V_el + V_nn
-
-#stopping
-stop_delta_ratio = 1e-3    
-    
-energy_hist = []
-lowest_energy = float('inf') 
-best_time_hist = []
-time_hist = []
-hist = []
-output_ = []
+    #loss function
+    radius = .4
+    magnitude = 100*N**(1/3)*radius
+    k = 1
 
 
-for i in tqdm(range(10), leave=False):
-    net = LayoutNet(num_nodes=N, output_dim=dim, hidden_dim_1=100, hidden_dim_2=100, hidden_dim_3=3, adj_mtx= DAD)
-    net.to(device)
-    
-    net.apply(init_weights)
-    optimizer = torch.optim.RMSprop(net.parameters(), lr=0.01)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=200, gamma=0.99)
-    # criterion = custom_loss
-    criterion = energy
-    
-    loss_history = [] 
-    
-    valid_losses_gcn = []
-    valid_losses_lin = []
-    
-    
-    patience = 10
-    r = list(np.zeros(patience))
-  
-    tt.tic()
-        
-    for epoch in tqdm(range(40000), leave=False): 
-        inp = x.to(device)
-        optimizer.zero_grad()
-        outputs = net(inp)
-        
-        # if epoch%5 ==0:
-        #     pairs = c_kdtree(outputs, 4)
-        # Dist = Distances_kdtree(outputs, pairs)
-        # loss = criterion(outputs, Dist)
-        loss = criterion(outputs)
 
-        loss.backward(retain_graph=True)
-        optimizer.step()
+    #stopping
+    stop_delta_ratio = args.stop_delta_ratio
         
-        loss_history.append(loss.item())
+    energy_hist = []
+    lowest_energy = float('inf') 
+    best_time_hist = []
+    time_hist = []
+    hist = []
+    output_ = []
+
+
+    for i in tqdm(range(10), leave=False):
+        net = LayoutNet(num_nodes=N, output_dim=layout_dim, hidden_dim_1=100, hidden_dim_2=100, hidden_dim_3=3, adj_mtx= DAD)
+        net.to(device)
+        
+        net.apply(init_weights)
+        optimizer = torch.optim.RMSprop(net.parameters(), lr=0.01)
+        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=200, gamma=0.99)
+        # criterion = custom_loss
+        criterion = energy
+        
+        loss_history = [] 
+        
+        valid_losses_gcn = []
+        valid_losses_lin = []
+        
+        
+        patience = 10
+        r = list(np.zeros(patience))
     
+        tt.tic()
+            
+        for epoch in tqdm(range(40000), leave=False): 
+            inp = x.to(device)
+            optimizer.zero_grad()
+            outputs = net(inp)
+            
+            # if epoch%5 ==0:
+            #     pairs = c_kdtree(outputs, 4)
+            # Dist = Distances_kdtree(outputs, pairs)
+            # loss = criterion(outputs, Dist)
+            loss = criterion(outputs, adjacency_list, N)
+
+            loss.backward(retain_graph=True)
+            optimizer.step()
+            
+            loss_history.append(loss.item())
         
-        r.append(loss.item())
-        r.pop(0)
+            
+            r.append(loss.item())
+            r.pop(0)
+            
+            scheduler.step()
+            
+            
+            # if (difference(r)) < .0001*np.sqrt(N):
+            if early_stopping(loss_history,stop_delta_ratio=10*stop_delta_ratio):
+                time_hist += [tt.toc()]
+                break
+            
+            time_hist += [tt.toc()]      
         
-        scheduler.step()
+        w = torch.nn.Parameter(outputs.detach())
+        net1 = LayoutLinear(w)
+        optimizer1 = torch.optim.RMSprop(net1.parameters(), lr=0.01)
+            
+        for epoch1 in tqdm(range(epoch, 60000), leave=False): #60k
+            inp = x.to(device)
         
-        
-        # if (difference(r)) < .0001*np.sqrt(N):
-        if early_stopping(loss_history,stop_delta_ratio=stop_delta_ratio):
+            optimizer1.zero_grad()
+            outputs1 = net1(inp)
+            
+            # if epoch1%5 ==0:
+            #     pairs = c_kdtree(outputs1, 4)
+            # Dist = Distances_kdtree(outputs1, pairs) 
+            # loss1 = criterion(outputs1, Dist)
+            loss1 = criterion(outputs1, adjacency_list, N)
+
+            loss1.backward(retain_graph=True)
+            optimizer1.step()
+            
+            loss_history.append(loss1.item())
+            
+            r.append(loss1.item())
+            r.pop(0)
+            
+            scheduler.step()
+            
+            # if (difference(r)) < 1e-8*np.sqrt(N):
+            if early_stopping(loss_history,stop_delta_ratio=stop_delta_ratio):
+                time_hist += [tt.toc()]           
+                break
+    
             time_hist += [tt.toc()]
-            break
         
-        time_hist += [tt.toc()]      
-    
-    write_log(log_path, 'Finished training gcn: ' +  str(epoch) + ' time: ' + str(tt.toc()) + ' energy: ' + str(loss.item()) + "\n")
-    
-    w = torch.nn.Parameter(outputs.detach())
-    net1 = LayoutLinear(w)
-    optimizer1 = torch.optim.RMSprop(net1.parameters(), lr=0.01)
         
-    for epoch1 in tqdm(range(epoch, 60000), leave=False): #60k
-        inp = x.to(device)
-    
-        optimizer1.zero_grad()
-        outputs1 = net1(inp)
-        
-        # if epoch1%5 ==0:
-        #     pairs = c_kdtree(outputs1, 4)
-        # Dist = Distances_kdtree(outputs1, pairs) 
-        # loss1 = criterion(outputs1, Dist)
-        loss1 = criterion(outputs1)
+        hist += [loss_history]
+        energy_hist += [loss1.item()]
+        write_log(log_path, 'Graph: ' + f + 'Finished training ' + str(i) + ' epoch: ' + str(epoch1) + \
+                ' time: ' + str(tt.toc()) + ' energy: ' + str(energy_hist[-1]) + "\n")
 
-        loss1.backward(retain_graph=True)
-        optimizer1.step()
-        
-        loss_history.append(loss1.item())
-        
-        r.append(loss1.item())
-        r.pop(0)
-        
-        scheduler.step()
-        
-        # if (difference(r)) < 1e-8*np.sqrt(N):
-        if early_stopping(loss_history,stop_delta_ratio=0.1*stop_delta_ratio):
-            time_hist += [tt.toc()]           
-            break
-   
-        time_hist += [tt.toc()]
-    
-    
-    hist += [loss_history]
-    energy_hist += [loss1.item()]
-    write_log(log_path, 'Finished training ' + str(i) + ' epoch: ' + str(epoch1) + ' time: ' + str(tt.toc()) + ' energy: ' + str(energy_hist[-1]) + "\n")
+        if energy_hist[-1] < lowest_energy:
+            write_log(log_path, "Better result with energy: " + str(energy_hist[-1]) + "\n")
+            lowest_energy = energy_hist[-1]
+            best_outputs = outputs1
+            
+    if args.csv_dir is not None:    
+        d = pd.DataFrame(energy_hist)
+        d.to_csv(os.path.join(args.csv_dir, f.split('.')[0] + '_energy_neulay.csv'), header=True,index=False)
 
-    if energy_hist[-1] < lowest_energy:
-        write_log(log_path, "Better result with energy: " + str(energy_hist[-1]) + "\n")
-        lowest_energy = energy_hist[-1]
-        best_outputs = outputs1
-    
-d = pd.DataFrame(energy_hist)
-d.to_csv('./neulay/internet_energy_neulay.csv', header=True,index=False)
+        d = pd.DataFrame(time_hist)
+        d.to_csv(os.path.join(args.csv_dir, f.split('.')[0] + '_time_neulay.csv'), header=True,index=False)
 
-d = pd.DataFrame(time_hist)
-d.to_csv('./neulay/internet_time_neulay.csv', header=True,index=False)
+        d = pd.DataFrame(hist)
+        d.to_csv(os.path.join(args.csv_dir, f.split('.')[0] + '_loss_neulay.csv'), header=True,index=False)
 
-d = pd.DataFrame(hist)
-d.to_csv('./neulay/internet_loss_neulay.csv', header=True,index=False)
-
-d = pd.DataFrame(outputs1.detach().cpu().numpy())
-d.to_csv('./neulay/internet_output_neulay.csv', header=True,index=False)
+        d = pd.DataFrame(best_outputs.detach().cpu().numpy())
+        d.to_csv(os.path.join(args.csv_dir, f.split('.')[0] + '_output_neulay.csv'), header=True,index=False)
 
 
 
