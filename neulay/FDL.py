@@ -15,6 +15,8 @@ import sys
 sys.path.append(os.getcwd())
 from neulay.neulay_utils import *
 
+import argparse
+
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
 print(device)
@@ -100,7 +102,7 @@ best_time_hist = []
 time_hist_lin = []
 hist = []
 
-for i in range(10):
+for i in tqdm(range(10), leave=False):
     net = nn.Linear(N, dim, bias=False)
     net.to(device)
     net.apply(init_weights)

@@ -56,7 +56,7 @@ class GCN(nn.Module):
     def __init__(self, input_dim, output_dim, adj_mx):
         super(GCN, self).__init__()
         self.input_dim = input_dim
-        self.adj_mx = adj_mx
+        self.adj_mx = adj_mx.to(device)
         self.output_dim = output_dim
         #self.dense = nn.Linear(input_dim, output_dim,bias=False)
         self.weight = torch.nn.Parameter(torch.nn.init.xavier_uniform_(torch.FloatTensor(self.input_dim, self.output_dim), gain= N**(1/dim)).to(device))
@@ -85,7 +85,7 @@ class LayoutNet(nn.Module):
         self.adj_mtx = adj_mtx
         
         #self.dense1 = nn.Linear(self.num_nodes, self.hidden_dim_1, bias= False)
-        self.weight1 = torch.nn.Parameter(torch.nn.init.xavier_uniform(torch.FloatTensor(self.num_nodes, self.hidden_dim_1), gain= N**(1/dim)).to(device))
+        self.weight1 = torch.nn.Parameter(torch.nn.init.xavier_uniform_(torch.FloatTensor(self.num_nodes, self.hidden_dim_1), gain= N**(1/dim)).to(device))
         #torch.nn.Parameter(torch.rand(self.num_nodes, self.hidden_dim_1))#
         self.GCN1 = GCN(self.hidden_dim_1, self.hidden_dim_2,self.adj_mtx.float()).to(device)
         
@@ -143,7 +143,7 @@ x = sparse_mx_to_torch_sparse_tensor(x)
 # model
 def init_weights(m):
     if type(m) == nn.Linear:
-        torch.nn.init.xavier_uniform(m.weight, gain= N**(1/dim))
+        torch.nn.init.xavier_uniform_(m.weight, gain= N**(1/dim))
 
 #loss function
 radius = .4
@@ -186,14 +186,13 @@ hist = []
 output_ = []
 
 
-for i in range(10):
+for i in tqdm(range(10), leave=False):
     net = LayoutNet(num_nodes=N, output_dim=dim, hidden_dim_1=100, hidden_dim_2=100, hidden_dim_3=3, adj_mtx= DAD)
     net.to(device)
     
     net.apply(init_weights)
-    print(net.GCN1)
     optimizer = torch.optim.RMSprop(net.parameters(), lr=0.01)
-    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=200, gamma=0.9)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=200, gamma=0.99)
     # criterion = custom_loss
     criterion = energy
     
@@ -238,7 +237,7 @@ for i in range(10):
         
         time_hist += [tt.toc()]      
     
-    write_log(log_path, 'Finished training gcn: ' +  str(epoch) + ' time: ' + str(tt.toc()) + ' energy: ' + str(loss) + "\n")
+    write_log(log_path, 'Finished training gcn: ' +  str(epoch) + ' time: ' + str(tt.toc()) + ' energy: ' + str(loss.item()) + "\n")
     
     w = torch.nn.Parameter(outputs.detach())
     net1 = LayoutLinear(w)
@@ -275,8 +274,8 @@ for i in range(10):
     
     
     hist += [loss_history]
-    energy_hist += [energy(outputs1).detach().numpy()]
-    write_log(log_path, 'Finished training' + str(i) + ' epoch: ' + str(epoch1) + ' time: ' + str(tt.toc()) + ' energy: ' + str(energy_hist[-1]) + "\n")
+    energy_hist += [loss1.item()]
+    write_log(log_path, 'Finished training ' + str(i) + ' epoch: ' + str(epoch1) + ' time: ' + str(tt.toc()) + ' energy: ' + str(energy_hist[-1]) + "\n")
 
     if energy_hist[-1] < lowest_energy:
         write_log(log_path, "Better result with energy: " + str(energy_hist[-1]) + "\n")
@@ -292,7 +291,7 @@ d.to_csv('./neulay/internet_time_neulay.csv', header=True,index=False)
 d = pd.DataFrame(hist)
 d.to_csv('./neulay/internet_loss_neulay.csv', header=True,index=False)
 
-d = pd.DataFrame(outputs1.detach().numpy())
+d = pd.DataFrame(outputs1.detach().cpu().numpy())
 d.to_csv('./neulay/internet_output_neulay.csv', header=True,index=False)
 
 
