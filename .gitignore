@@ -2,3 +2,4 @@ graphs/
 *.csv
 */__*
 .vscode
+*.txt

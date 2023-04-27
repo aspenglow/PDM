@@ -63,3 +63,6 @@ def early_stopping(metric_list,
         # print(f'Loss change ratio: {ratio:.3g}', end='\r')
     return ratio < stop_delta_ratio 
     
+def write_log(log_path, string):
+    with open(log_path,'a') as f:
+        f.write(string)

@@ -15,8 +15,13 @@ sys.path.append(os.getcwd())
 from neulay.neulay_utils import *
 
 #device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
   
 tt = tictoc()
+
+# log path
+log_path = "neulay/log_neulay.txt"
 
 # import a graph
 data_dir = "graphs/erdos_renyi"
@@ -54,7 +59,7 @@ class GCN(nn.Module):
         self.adj_mx = adj_mx
         self.output_dim = output_dim
         #self.dense = nn.Linear(input_dim, output_dim,bias=False)
-        self.weight = torch.nn.Parameter(torch.nn.init.xavier_uniform(torch.FloatTensor(self.input_dim, self.output_dim), gain= N**(1/dim))) 
+        self.weight = torch.nn.Parameter(torch.nn.init.xavier_uniform_(torch.FloatTensor(self.input_dim, self.output_dim), gain= N**(1/dim))).to(device) 
         #torch.nn.Parameter(torch.rand(self.input_dim, self.output_dim)) #
     def reset_parameters(self):
         stdv = 1. / math.sqrt(self.weight.size(1))
@@ -80,17 +85,17 @@ class LayoutNet(nn.Module):
         self.adj_mtx = adj_mtx
         
         #self.dense1 = nn.Linear(self.num_nodes, self.hidden_dim_1, bias= False)
-        self.weight1 = torch.nn.Parameter(torch.nn.init.xavier_uniform(torch.FloatTensor(self.num_nodes, self.hidden_dim_1), gain= N**(1/dim))) 
+        self.weight1 = torch.nn.Parameter(torch.nn.init.xavier_uniform_(torch.FloatTensor(self.num_nodes, self.hidden_dim_1), gain= N**(1/dim))).to(device)
         #torch.nn.Parameter(torch.rand(self.num_nodes, self.hidden_dim_1))#
-        self.GCN1 = GCN(self.hidden_dim_1, self.hidden_dim_2,self.adj_mtx.float())
+        self.GCN1 = GCN(self.hidden_dim_1, self.hidden_dim_2,self.adj_mtx.float()).to(device)
         
         #self.leakyrelu = nn.LeakyReLU(0.2)
-        self.tanh1 = nn.Tanh()
+        self.tanh1 = nn.Tanh().to(device)
         #self.sigmoid = nn.Sigmoid()
         
-        self.GCN2 = GCN(self.hidden_dim_2, self.hidden_dim_3, self.adj_mtx.float())
+        self.GCN2 = GCN(self.hidden_dim_2, self.hidden_dim_3, self.adj_mtx.float()).to(device)
        
-        self.weight2 = torch.nn.Parameter(torch.nn.init.xavier_uniform(torch.FloatTensor((self.hidden_dim_1 + self.hidden_dim_2+ self.hidden_dim_3), self.output_dim), gain= N**(1/dim)))
+        self.weight2 = torch.nn.Parameter(torch.nn.init.xavier_uniform_(torch.FloatTensor((self.hidden_dim_1 + self.hidden_dim_2 + self.hidden_dim_3), self.output_dim), gain= N**(1/dim))).to(device)
         #torch.nn.Parameter(torch.rand((self.hidden_dim_1 + self.hidden_dim_2+ self.hidden_dim_3), self.output_dim)) #
        
         #self.dense2 = nn.Linear((self.hidden_dim_1 + self.hidden_dim_2+ self.hidden_dim_3), self.output_dim, bias= False)
@@ -99,7 +104,7 @@ class LayoutNet(nn.Module):
     def forward(self, inp):
         x = torch.spmm(inp, self.weight1)
         #x = self.dense1(inp)
-        
+
         gnn1 = self.GCN1(x)
         
         #gnn1 = self.leakyrelu(gnn1)
@@ -174,6 +179,8 @@ def energy(output):
 stop_delta_ratio = 1e-3    
     
 energy_hist = []
+lowest_energy = float('inf') 
+best_time_hist = []
 time_hist = []
 hist = []
 output_ = []
@@ -181,9 +188,12 @@ output_ = []
 
 for i in range(10):
     net = LayoutNet(num_nodes=N, output_dim=dim, hidden_dim_1=100, hidden_dim_2=100, hidden_dim_3=3, adj_mtx= DAD)
-    #net.apply(init_weights)
-
+    net.to(device)
+    
+    net.apply(init_weights)
+    print(net.GCN1)
     optimizer = torch.optim.RMSprop(net.parameters(), lr=0.01)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=200, gamma=0.9)
     # criterion = custom_loss
     criterion = energy
     
@@ -199,8 +209,8 @@ for i in range(10):
     tt.tic()
         
     for epoch in tqdm(range(40000), leave=False): 
-        inp = x
-    
+        inp = x.to(device)
+        print(next(net.parameters()).device, inp.device)
         optimizer.zero_grad()
         outputs = net(inp)
         
@@ -219,6 +229,8 @@ for i in range(10):
         r.append(loss.item())
         r.pop(0)
         
+        scheduler.step()
+        
         
         # if (difference(r)) < .0001*np.sqrt(N):
         if early_stopping(loss_history,stop_delta_ratio=stop_delta_ratio):
@@ -226,15 +238,15 @@ for i in range(10):
             break
         
         time_hist += [tt.toc()]      
-        
-    print('Finished training gcn: ', epoch, ' time: ', tt.toc(),  'energy: ', energy(outputs).detach().numpy())
+    
+    write_log(log_path, 'Finished training gcn: ' +  str(epoch) + ' time: ' + str(tt.toc()) + ' energy: ' + str(loss) + "\n")
     
     w = torch.nn.Parameter(outputs.detach())
     net1 = LayoutLinear(w)
     optimizer1 = torch.optim.RMSprop(net1.parameters(), lr=0.01)
         
     for epoch1 in tqdm(range(epoch, 60000), leave=False): #60k
-        inp = x
+        inp = x.to(device)
     
         optimizer1.zero_grad()
         outputs1 = net1(inp)
@@ -252,7 +264,8 @@ for i in range(10):
         
         r.append(loss1.item())
         r.pop(0)
-               
+        
+        scheduler.step()
         
         # if (difference(r)) < 1e-8*np.sqrt(N):
         if early_stopping(loss_history,stop_delta_ratio=0.1*stop_delta_ratio):
@@ -264,20 +277,24 @@ for i in range(10):
     
     hist += [loss_history]
     energy_hist += [energy(outputs1).detach().numpy()]
-    print('Finished training', i, 'epoch: ', epoch1, ' time: ', tt.toc(), 'energy: ', energy_hist[-1])
+    write_log(log_path, 'Finished training' + str(i) + ' epoch: ' + str(epoch1) + ' time: ' + str(tt.toc()) + ' energy: ' + str(energy_hist[-1]) + "\n")
 
+    if energy_hist[-1] < lowest_energy:
+        write_log(log_path, "Better result with energy: " + str(energy_hist[-1]) + "\n")
+        lowest_energy = energy_hist[-1]
+        best_outputs = outputs1
     
 d = pd.DataFrame(energy_hist)
-d.to_csv('./internet_energy_neulay.csv', header=True,index=False)
+d.to_csv('./neulay/internet_energy_neulay.csv', header=True,index=False)
 
 d = pd.DataFrame(time_hist)
-d.to_csv('./internet_time_neulay.csv', header=True,index=False)
+d.to_csv('./neulay/internet_time_neulay.csv', header=True,index=False)
 
 d = pd.DataFrame(hist)
-d.to_csv('./internet_loss_neulay.csv', header=True,index=False)
+d.to_csv('./neulay/internet_loss_neulay.csv', header=True,index=False)
 
 d = pd.DataFrame(outputs1.detach().numpy())
-d.to_csv('./internet_output_neulay.csv', header=True,index=False)
+d.to_csv('./neulay/internet_output_neulay.csv', header=True,index=False)
 
 
 

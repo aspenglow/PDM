@@ -15,9 +15,15 @@ import sys
 sys.path.append(os.getcwd())
 from neulay.neulay_utils import *
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+print(device)
 
 # measure time
 tt = tictoc()
+
+# log path
+log_path = "neulay/log_fdl.txt"
 
 # introduce a graph
 data_dir = "graphs/erdos_renyi"
@@ -89,16 +95,18 @@ stop_delta_ratio = 1e-4
 #optimizer    
     
 energy_hist_lin = []
+lowest_energy = float('inf') 
+best_time_hist = []
 time_hist_lin = []
 hist = []
-output_ = []
 
 for i in range(10):
     net = nn.Linear(N, dim, bias=False)
+    net.to(device)
     net.apply(init_weights)
 
-
     optimizer = torch.optim.RMSprop(net.parameters(), lr=0.01)
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=500, gamma=0.99)
     # criterion = custom_loss
     criterion = energy
     
@@ -110,11 +118,11 @@ for i in range(10):
     
     tt.tic()
     
-    for epoch in tqdm(range(500000), leave=False):  
-        inp = x
+    for epoch in tqdm(range(50000), leave=False):  
+        inp = x.to(device)
     
         optimizer.zero_grad()
-
+        
         outputsLin = net(inp)
         
         # if epoch%5 ==0:
@@ -132,6 +140,8 @@ for i in range(10):
         r.append(loss.item())
         r.pop(0)
         
+        scheduler.step()
+        
         time_hist.append(tt.toc())
         
         # if (difference(r)) < 1e-8*np.sqrt(N):
@@ -140,20 +150,26 @@ for i in range(10):
             break
     
     hist += [loss_history_lin]
-    energy_hist_lin += [energy(outputsLin).detach().numpy()]
-    print('Finished training', i, ' time: ', tt.toc(), 'energy: ', energy_hist_lin[-1])
+    energy_hist_lin += [loss.detach().cpu().numpy()]
+    # energy_hist_lin += [energy(outputsLin).detach().cpu().numpy()]
+    # print(loss, " ", energy(outputsLin).detach().cpu().numpy())
+    write_log(log_path, 'Finished training ' + str(i) + ' epoch: ' + str(epoch) + ' time: ' + str(tt.toc()) + ' energy: ' + str(energy_hist_lin[-1]) + "\n")
+    print('Finished training '+ str(i) + ' epoch: ' + str(epoch) + ' time: ' + str(tt.toc()) + ' energy: ' + str(energy_hist_lin[-1]))
     
-    
+    if energy_hist_lin[-1] < lowest_energy:
+        write_log(log_path, "Better result with energy: " + str(energy_hist_lin[-1]) + "\n")
+        lowest_energy = energy_hist_lin[-1]
+        best_outputs = outputsLin
     
 d = pd.DataFrame(energy_hist_lin)
-d.to_csv('./internet_energy_fdl.csv', header=True,index=False)
+d.to_csv('./neulay/internet_energy_fdl.csv', header=True,index=False)
 
 d = pd.DataFrame(time_hist_lin)
-d.to_csv('./internet_time_fdl.csv', header=True,index=False)
+d.to_csv('./neulay/internet_time_fdl.csv', header=True,index=False)
 
 d = pd.DataFrame(hist)
-d.to_csv('./internet_loss_fdl.csv', header=True,index=False)
+d.to_csv('./neulay/internet_loss_fdl.csv', header=True,index=False)
 
-d = pd.DataFrame(outputsLin.detach().numpy())
-d.to_csv('./internet_output_fdl.csv', header=True,index=False)
+d = pd.DataFrame(best_outputs.detach().cpu().numpy())
+d.to_csv('./neulay/internet_output_fdl.csv', header=True,index=False)
 
