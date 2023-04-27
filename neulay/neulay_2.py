@@ -59,7 +59,7 @@ class GCN(nn.Module):
         self.adj_mx = adj_mx
         self.output_dim = output_dim
         #self.dense = nn.Linear(input_dim, output_dim,bias=False)
-        self.weight = torch.nn.Parameter(torch.nn.init.xavier_uniform_(torch.FloatTensor(self.input_dim, self.output_dim), gain= N**(1/dim))).to(device) 
+        self.weight = torch.nn.Parameter(torch.nn.init.xavier_uniform_(torch.FloatTensor(self.input_dim, self.output_dim), gain= N**(1/dim)).to(device))
         #torch.nn.Parameter(torch.rand(self.input_dim, self.output_dim)) #
     def reset_parameters(self):
         stdv = 1. / math.sqrt(self.weight.size(1))
@@ -85,7 +85,7 @@ class LayoutNet(nn.Module):
         self.adj_mtx = adj_mtx
         
         #self.dense1 = nn.Linear(self.num_nodes, self.hidden_dim_1, bias= False)
-        self.weight1 = torch.nn.Parameter(torch.nn.init.xavier_uniform_(torch.FloatTensor(self.num_nodes, self.hidden_dim_1), gain= N**(1/dim))).to(device)
+        self.weight1 = torch.nn.Parameter(torch.nn.init.xavier_uniform(torch.FloatTensor(self.num_nodes, self.hidden_dim_1), gain= N**(1/dim)).to(device))
         #torch.nn.Parameter(torch.rand(self.num_nodes, self.hidden_dim_1))#
         self.GCN1 = GCN(self.hidden_dim_1, self.hidden_dim_2,self.adj_mtx.float()).to(device)
         
@@ -95,7 +95,7 @@ class LayoutNet(nn.Module):
         
         self.GCN2 = GCN(self.hidden_dim_2, self.hidden_dim_3, self.adj_mtx.float()).to(device)
        
-        self.weight2 = torch.nn.Parameter(torch.nn.init.xavier_uniform_(torch.FloatTensor((self.hidden_dim_1 + self.hidden_dim_2 + self.hidden_dim_3), self.output_dim), gain= N**(1/dim))).to(device)
+        self.weight2 = torch.nn.Parameter(torch.nn.init.xavier_uniform_(torch.FloatTensor((self.hidden_dim_1 + self.hidden_dim_2 + self.hidden_dim_3), self.output_dim), gain= N**(1/dim)).to(device))
         #torch.nn.Parameter(torch.rand((self.hidden_dim_1 + self.hidden_dim_2+ self.hidden_dim_3), self.output_dim)) #
        
         #self.dense2 = nn.Linear((self.hidden_dim_1 + self.hidden_dim_2+ self.hidden_dim_3), self.output_dim, bias= False)
@@ -210,7 +210,6 @@ for i in range(10):
         
     for epoch in tqdm(range(40000), leave=False): 
         inp = x.to(device)
-        print(next(net.parameters()).device, inp.device)
         optimizer.zero_grad()
         outputs = net(inp)
         
