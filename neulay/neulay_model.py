@@ -37,7 +37,7 @@ class GCN(nn.Module):
         return output
     
 class LayoutNet(nn.Module):
-    def __init__(self, num_nodes, output_dim, hidden_dim_1, hidden_dim_2, hidden_dim_3, adj_mtx, N, device=None, layout_dim=3):
+    def __init__(self, num_nodes, output_dim, hidden_dim_1, hidden_dim_2, hidden_dim_3, adj_mtx, device=None, layout_dim=3):
         super(LayoutNet, self).__init__()
         self.num_nodes = num_nodes
         self.output_dim = output_dim
@@ -45,22 +45,23 @@ class LayoutNet(nn.Module):
         self.hidden_dim_2 = hidden_dim_2
         self.hidden_dim_3 = hidden_dim_3
         self.adj_mtx = adj_mtx
+        self.layout_dim = layout_dim
         if device==None:
             device = ('cuda' if torch.cuda.is_available() else 'cpu')
         self.device = torch.device(device)
         
         #self.dense1 = nn.Linear(self.num_nodes, self.hidden_dim_1, bias= False)
-        self.weight1 = torch.nn.Parameter(torch.nn.init.xavier_uniform_(torch.FloatTensor(self.num_nodes, self.hidden_dim_1), gain= N**(1/layout_dim)).to(self.device))
+        self.weight1 = torch.nn.Parameter(torch.nn.init.xavier_uniform_(torch.FloatTensor(self.num_nodes, self.hidden_dim_1), gain=self.num_nodes**(1/self.layout_dim)).to(self.device))
         #torch.nn.Parameter(torch.rand(self.num_nodes, self.hidden_dim_1))#
-        self.GCN1 = GCN(self.hidden_dim_1, self.hidden_dim_2,self.adj_mtx.float(), N, device=device).to(self.device)
+        self.GCN1 = GCN(self.hidden_dim_1, self.hidden_dim_2,self.adj_mtx.float(), self.num_nodes, device=device).to(self.device)
         
         #self.leakyrelu = nn.LeakyReLU(0.2)
         self.tanh1 = nn.Tanh().to(self.device)
         #self.sigmoid = nn.Sigmoid()
         
-        self.GCN2 = GCN(self.hidden_dim_2, self.hidden_dim_3, self.adj_mtx.float(), N, device=device).to(self.device)
+        self.GCN2 = GCN(self.hidden_dim_2, self.hidden_dim_3, self.adj_mtx.float(), self.num_nodes, device=device).to(self.device)
        
-        self.weight2 = torch.nn.Parameter(torch.nn.init.xavier_uniform_(torch.FloatTensor((self.hidden_dim_1 + self.hidden_dim_2 + self.hidden_dim_3), self.output_dim), gain= N**(1/layout_dim)).to(self.device))
+        self.weight2 = torch.nn.Parameter(torch.nn.init.xavier_uniform_(torch.FloatTensor((self.hidden_dim_1 + self.hidden_dim_2 + self.hidden_dim_3), self.output_dim), gain=self.num_nodes**(1/layout_dim)).to(self.device))
         #torch.nn.Parameter(torch.rand((self.hidden_dim_1 + self.hidden_dim_2+ self.hidden_dim_3), self.output_dim)) #
        
         #self.dense2 = nn.Linear((self.hidden_dim_1 + self.hidden_dim_2+ self.hidden_dim_3), self.output_dim, bias= False)

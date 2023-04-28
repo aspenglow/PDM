@@ -20,7 +20,7 @@ parser = argparse.ArgumentParser(
     'Force-Directed Layout algorithm to calculate final layout given a graph.')
 parser.add_argument('--data-dir', type=str, default="graphs/erdos_renyi",
                     help='Path to load graphs.')
-parser.add_argument('--graph-num', type=int, default=5,
+parser.add_argument('--graph-num', type=int, default=-1,
                     help='Number of graph to train. -1 means load all of graphs in data-dir.')
 parser.add_argument('--layout-dir', type=str, default="layouts/erdos_renyi",
                     help='Path to save trained graph layouts.')
