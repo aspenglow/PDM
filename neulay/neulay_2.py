@@ -202,7 +202,7 @@ for f in tqdm(files, leave=False):
         
         hist += [loss_history]
         energy_hist += [loss1.item()]
-        write_log(log_path, 'Graph: ' + f + 'Finished training ' + str(i) + ' epoch: ' + str(epoch1) + \
+        write_log(log_path, 'Graph: ' + f + ' Finished training ' + str(i) + ' epoch: ' + str(epoch1) + \
                 ' time: ' + str(tt.toc()) + ' energy: ' + str(energy_hist[-1]) + "\n")
 
         if energy_hist[-1] < lowest_energy:
