@@ -19,9 +19,8 @@ def generate_erdos_renyi_graph(save_dir='graphs/erdos_renyi', num = 500, n_range
     for i in tqdm(range(num)):
         n = np.random.randint(n_range[0], n_range[1])
         g = nx.random_graphs.erdos_renyi_graph(n,p)
-        if not nx.is_connected(g):
-            i -= 1
-            continue
+        while not nx.is_connected(g):
+            g = nx.random_graphs.erdos_renyi_graph(n,p)
         nx.write_gpickle(g, os.path.join(save_dir, "er"+str(i+1)+".pkl"))
         
 def generate_sbm_graph(save_dir='graphs/sbm', num_graphs=500, num_blocks=2, node_range=[50,500], p_in=0.2, p_betw=0.05):
@@ -34,9 +33,8 @@ def generate_sbm_graph(save_dir='graphs/sbm', num_graphs=500, num_blocks=2, node
             probs[j,j] += (p_in - p_betw) 
         
         g = nx.stochastic_block_model(sizes, probs)
-        if not nx.is_connected(g):
-            i -= 1
-            continue
+        while not nx.is_connected(g):
+            g = nx.stochastic_block_model(sizes, probs)
         nx.write_gpickle(g, os.path.join(save_dir, "sbm"+str(i+1)+".pkl"))
         
 
