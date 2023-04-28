@@ -22,6 +22,8 @@ parser.add_argument('--data-dir', type=str, default="graphs/erdos_renyi",
                     help='Path to load graphs.')
 parser.add_argument('--graph-num', type=int, default=5,
                     help='Number of graph to train. -1 means load all of graphs in data-dir.')
+parser.add_argument('--graphs-start-at', type=int, default=0,
+                    help='From which picture to start training.')
 parser.add_argument('--layout-dir', type=str, default="layouts/erdos_renyi",
                     help='Path to save trained graph layouts.')
 parser.add_argument('--layout_dim', type=int, default=3,
@@ -56,10 +58,12 @@ os.makedirs(layout_dir, exist_ok=True)
 
 # introduce graphs
 data_dir = args.data_dir
+graphs_start_at = args.graphs_start_at
 graphs_num = args.graph_num
-if graphs_num == -1:
-    files = os.listdir(data_dir)
-else:
+files = os.listdir(data_dir)
+if graphs_start_at > 0:
+    files = files[graphs_start_at:]
+if graphs_num > -1:
     files = os.listdir(data_dir)[:graphs_num]
 
 for f in tqdm(files, leave=False):
