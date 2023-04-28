@@ -162,6 +162,7 @@ for f in tqdm(files, leave=False):
             lowest_energy = energy_hist_lin[-1]
             best_outputs = outputsLin
     
+    write_log(log_path, "\n")
     graph_name = f.split('.')[0]
     torch.save(best_outputs, os.path.join(layout_dir, graph_name + '.pt'))
     

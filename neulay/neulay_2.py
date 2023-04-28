@@ -26,7 +26,7 @@ parser.add_argument('--layout-dir', type=str, default="layouts/erdos_renyi",
                     help='Path to save trained graph layouts.')
 parser.add_argument('--layout_dim', type=int, default=3,
                     help='Dimension of graph layout.')
-parser.add_argument('--log-path', type=str, default="neulay/log_fdl.txt",
+parser.add_argument('--log-path', type=str, default="neulay/log_neulay.txt",
                     help='Path to save training log.')
 parser.add_argument('--csv-dir', type=str, default=None,
                     help='Path to save results of loss and time.')
@@ -209,7 +209,8 @@ for f in tqdm(files, leave=False):
             write_log(log_path, "Better result with energy: " + str(energy_hist[-1]) + "\n")
             lowest_energy = energy_hist[-1]
             best_outputs = outputs1
-        
+    
+    write_log(log_path, "\n")    
     graph_name = f.split('.')[0]
     torch.save(best_outputs, os.path.join(layout_dir, graph_name + '.pt'))
             
