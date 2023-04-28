@@ -24,7 +24,7 @@ def generate_erdos_renyi_graph(save_dir='graphs/erdos_renyi', num = 500, n_range
             continue
         nx.write_gpickle(g, os.path.join(save_dir, "er"+str(i+1)+".pkl"))
         
-def generate_sbm_graph(save_dir='graphs/sbm', num_graphs=500, num_blocks=2, node_range=[50,500], p_in=0.2, p_betw=0.05):
+def generate_sbm_graph(save_dir='graphs/sbm', num_graphs=500, num_blocks=2, node_range=[50,500], p_in=0.2, p_betw=0.02):
     os.makedirs(save_dir, exist_ok=True)
     for i in tqdm(range(num_graphs)):
         probs = p_betw * np.ones((num_blocks, num_blocks))
