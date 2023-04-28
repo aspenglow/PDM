@@ -14,7 +14,7 @@ def parse_args():
     return args
 
 
-def generate_erdos_renyi_graph(save_dir='graphs/erdos_renyi', num = 500, n_range=[100,1000], p=0.1):
+def generate_erdos_renyi_graph(save_dir='graphs/erdos_renyi', num_graphs = 500, n_range=[100,1000], p=0.1):
     os.makedirs(save_dir, exist_ok=True)
     for i in tqdm(range(num)):
         n = np.random.randint(n_range[0], n_range[1])
@@ -22,6 +22,8 @@ def generate_erdos_renyi_graph(save_dir='graphs/erdos_renyi', num = 500, n_range
         while not nx.is_connected(g):
             g = nx.random_graphs.erdos_renyi_graph(n,p)
         nx.write_gpickle(g, os.path.join(save_dir, "er"+str(i+1)+".pkl"))
+    if num_graphs == 1:
+        return g
         
 def generate_sbm_graph(save_dir='graphs/sbm', num_graphs=500, num_blocks=2, node_range=[50,500], p_in=0.2, p_betw=0.05):
     os.makedirs(save_dir, exist_ok=True)
@@ -36,10 +38,12 @@ def generate_sbm_graph(save_dir='graphs/sbm', num_graphs=500, num_blocks=2, node
         while not nx.is_connected(g):
             g = nx.stochastic_block_model(sizes, probs)
         nx.write_gpickle(g, os.path.join(save_dir, "sbm"+str(i+1)+".pkl"))
+    if num_graphs == 1:
+        return g
         
 
 if __name__ == "__main__":
     args = parse_args()
-    generate_erdos_renyi_graph(num=args.num_er)
+    generate_erdos_renyi_graph(num_graphs=args.num_er)
     generate_sbm_graph(num_graphs=args.num_sbm)
     
