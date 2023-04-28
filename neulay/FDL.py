@@ -91,7 +91,7 @@ for f in tqdm(files, leave=False):
     k = 1
         
     #stopping
-    stop_delta_ratio = 1e-3
+    stop_delta_ratio = args.stop_delta_ratio
 
     #optimizer    
         
