@@ -34,7 +34,7 @@ parser.add_argument('--csv-dir', type=str, default=None,
                     help='Path to save results of loss and time.')
 parser.add_argument('--train-num', type=int, default=5,
                     help='Number of training per graph, then save the layout with lowest loss.')
-parser.add_argument('--stop-delta-ratio', type=int, default=1e-4,
+parser.add_argument('--stop-delta-ratio', type=float, default=1e-4,
                     help='A parameter to early stop the training.')
 parser.add_argument('--use-gpu', type=bool, default=True,
                     help='Use gpu to  training.')
