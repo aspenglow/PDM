@@ -4,3 +4,4 @@ graphs/
 .vscode
 *.txt
 layouts/
+__pycache__
