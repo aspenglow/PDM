@@ -8,6 +8,8 @@ import numpy as np
 import time
 from tqdm import tqdm
 
+import sys
+sys.path.append(os.getcwd())
 from latentgnn.position_encoding import LapEncoding
 from latentgnn.utils_latentgnn import edge_list_to_tensor, graph_to_edge_list
 from latentgnn.latentgnn_v1 import LatentGNN
@@ -38,8 +40,16 @@ parser.add_argument('--log-dir', type=str, default="log",
                     help='Dir to save train validation and test logs.')
 parser.add_argument('--epochs', type=int, default=50,
                     help='Numer of epoch to train.')
+parser.add_argument('--use-gpu', type=bool, default=True,
+                    help='Use gpu to  training.')
 
 args = parser.parse_args()
+
+if args.use_gpu:
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+else:
+    device = 'cpu'
 
 graph_root_dir = args.graph_root_dir
 layout_root_dir = args.layout_root_dir
@@ -61,6 +71,7 @@ log_dir = args.log_dir
 train_loader, validation_loader, test_loader = load_data(graph_root_dir, layout_root_dir, dataset_ratio, encoding_dim)
 
 model = LatentGNN(in_features=encoding_dim, out_features=3, latent_dims=latent_dims, channel_multi=channel_multi)  # 加载模型
+model.to(device)
 optimizer = torch.optim.Adam(model.parameters(), 0.01) # 优化器
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.9)
 criterion = one_norm_distance
@@ -72,6 +83,8 @@ def train(epoch):
     average_loss = 0.
     for batch_idx, (Adj, feature, layout) in tqdm(enumerate(train_loader), desc="train", leave=False):
         optimizer.zero_grad()
+        Adj = Adj.to(device)
+        feature = feature.to(device)
         predict_layout = model(Adj, feature)
         adjacency_list = torch.where(torch.triu(torch.tensor(Adj[0])))
         predict_energy = energy(predict_layout[0], adjacency_list, len(Adj[0]))
