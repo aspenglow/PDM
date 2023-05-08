@@ -12,7 +12,7 @@ import math
 
 import sys
 sys.path.append(os.getcwd())
-from neulay.neulay_utils import *
+from neulay.utils_neulay import *
 
 class GCN(nn.Module):
     def __init__(self, input_dim, output_dim, adj_mx, N, device=None, layout_dim=3):

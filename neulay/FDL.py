@@ -13,7 +13,7 @@ import os
 from tqdm import tqdm
 import sys
 sys.path.append(os.getcwd())
-from neulay.neulay_utils import *
+from neulay.utils_neulay import *
 
 import argparse
 parser = argparse.ArgumentParser(

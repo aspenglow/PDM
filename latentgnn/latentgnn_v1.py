@@ -13,6 +13,7 @@
 import torch
 import torch.nn as nn 
 import torch.nn.functional as F
+import networkx as nx
 
 import numpy as np
 
@@ -23,7 +24,7 @@ class LatentGNN(nn.Module):
     Args:
         in_features (int): Number of channels in the input feature 
         latent_dims (list): List of latent dimensions  
-        channel_stride (int): Channel reduction factor. Default: 4
+        channel_multi (int): Channel reduction factor. Default: 4
         num_kernels (int): Number of latent kernels used. Default: 1
         mode (str): Mode of bipartite graph message propagation. Default: 'asymmetric'.
         without_residual (bool): Flag of use residual connetion. Default: False
@@ -33,17 +34,18 @@ class LatentGNN(nn.Module):
 
     """
     def __init__(self, in_features, out_features, latent_dims, 
-                    channel_stride=4, num_kernels=1, 
-                    mode='asymmetric', without_residual=True, 
+                    channel_multi=4, visible_GCN_nums=[1,1], 
+                    mode='symmetric', without_residual=True, 
                     norm_layer=nn.LayerNorm, norm_func=F.normalize,
                     graph_conv_flag=False):
         super(LatentGNN, self).__init__()
         self.without_resisual = without_residual
-        self.num_kernels = num_kernels
+        self.num_kernels = len(latent_dims)
+        self.visible_GCN_nums=visible_GCN_nums
         self.mode = mode
         self.norm_func = norm_func
 
-        latent_channel = in_features * channel_stride
+        latent_channel = in_features * channel_multi
 
         # Reduce the channel dimension for efficiency
         if mode == 'asymmetric':
@@ -73,9 +75,9 @@ class LatentGNN(nn.Module):
             raise NotImplementedError
 
         # Define the latentgnn kernel
-        assert len(latent_dims) == num_kernels, 'Latent dimensions mismatch with number of kernels'
+        assert len(latent_dims) == self.num_kernels, 'Latent dimensions mismatch with number of kernels'
 
-        for i in range(num_kernels):
+        for i in range(self.num_kernels):
             self.add_module('LatentGNN_Kernel_{}'.format(i), 
                                 LatentGNN_Kernel(in_features=latent_channel, 
                                                 latent_dim=latent_dims[i],
@@ -85,7 +87,7 @@ class LatentGNN(nn.Module):
                                                 graph_conv_flag=graph_conv_flag))
         # Increase the channel for the output
         self.up_channel = nn.Sequential(
-                                    nn.Linear(in_features=latent_channel*num_kernels,
+                                    nn.Linear(in_features=latent_channel*self.num_kernels,
                                                 out_features=out_features, bias=False)
                                     
         )
@@ -94,32 +96,41 @@ class LatentGNN(nn.Module):
         # Residual Connection
         self.gamma = nn.Parameter(torch.zeros(1))
     
-    def forward(self, conv_feature):
+    def forward(self, Adj, node_feature):
+        # Adj: adjacency matrix of input graph
+        # message passing in visible space
+        for i in range(self.visible_GCN_nums[0]):
+            node_feature = torch.bmm(Adj, node_feature)
+        
         # Generate visible space feature 
         if self.mode == 'asymmetric':
-            v2l_conv_feature = self.down_channel_v2l(conv_feature)
-            l2v_conv_feature = self.down_channel_l2v(conv_feature)
-            v2l_conv_feature = self.norm_func(v2l_conv_feature, dim=1)
-            l2v_conv_feature = self.norm_func(l2v_conv_feature, dim=1)
+            v2l_node_feature = self.down_channel_v2l(node_feature)
+            l2v_node_feature = self.down_channel_l2v(node_feature)
+            v2l_node_feature = self.norm_func(v2l_node_feature, dim=2)
+            l2v_node_feature = self.norm_func(l2v_node_feature, dim=2)
         elif self.mode == 'symmetric':
-            v2l_conv_feature = self.norm_func(self.down_channel(conv_feature), dim=1)
-            l2v_conv_feature = None
+            v2l_node_feature = self.norm_func(self.down_channel(node_feature), dim=2)
+            l2v_node_feature = None
         out_features = []
         for i in range(self.num_kernels):
-            out_features.append(eval('self.LatentGNN_Kernel_{}'.format(i))(v2l_conv_feature, l2v_conv_feature))
+            out_features.append(eval('self.LatentGNN_Kernel_{}'.format(i))(v2l_node_feature, l2v_node_feature))
         
         out_features = torch.cat(out_features, dim=2) if self.num_kernels > 1 else out_features[0]
+        
+        # message passing in visible space
+        for i in range(self.visible_GCN_nums[1]):
+            out_features = torch.bmm(Adj, out_features)
         
         out_features = self.up_channel(out_features)
 
         if self.without_resisual:
             return out_features
         else:
-            return conv_feature + out_features*self.gamma
+            return node_feature + out_features*self.gamma
 
 class LatentGNN_Kernel(nn.Module):
     """
-    A LatentGNN Kernel Implementation
+    Adj LatentGNN Kernel Implementation
 
     Args:
 
@@ -173,22 +184,22 @@ class LatentGNN_Kernel(nn.Module):
                         )
             nn.init.normal_(self.GraphConvWeight[0].weight, std=0.01)
 
-    def forward(self, v2l_conv_feature, l2v_conv_feature):
+    def forward(self, v2l_node_feature, l2v_node_feature):
         # Generate Bipartite Graph Adjacency Matrix
         if self.mode == 'asymmetric':
-            v2l_graph_adj = self.psi_v2l(v2l_conv_feature)
-            l2v_graph_adj = self.psi_l2v(l2v_conv_feature)
+            v2l_graph_adj = self.psi_v2l(v2l_node_feature)
+            l2v_graph_adj = self.psi_l2v(l2v_node_feature)
             v2l_graph_adj = self.norm_func(v2l_graph_adj, dim=2)
             l2v_graph_adj = self.norm_func(l2v_graph_adj, dim=1)
             # l2v_graph_adj = self.norm_func(l2v_graph_adj.view(B,-1, N), dim=2)
         elif self.mode == 'symmetric':
-            assert l2v_conv_feature is None
-            l2v_graph_adj = v2l_graph_adj = self.norm_func(self.psi(v2l_conv_feature).permute(0,2,1), dim=1)
+            assert l2v_node_feature is None
+            l2v_graph_adj = v2l_graph_adj = self.norm_func(self.psi(v2l_node_feature).permute(0,2,1), dim=2)
 
         #----------------------------------------------
         # Step1 : Visible-to-Latent 
         #----------------------------------------------
-        latent_node_feature = torch.bmm(v2l_graph_adj, v2l_conv_feature)
+        latent_node_feature = torch.bmm(v2l_graph_adj, v2l_node_feature)
 
         #----------------------------------------------
         # Step2 : Latent-to-Latent 

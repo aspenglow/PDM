@@ -5,3 +5,4 @@ graphs/
 *.txt
 layouts/
 __pycache__
+log

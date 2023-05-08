@@ -16,7 +16,7 @@ def parse_args():
 
 def generate_erdos_renyi_graph(save_dir='graphs/erdos_renyi', num_graphs = 500, n_range=[100,1000], p=0.1):
     os.makedirs(save_dir, exist_ok=True)
-    for i in tqdm(range(num)):
+    for i in tqdm(range(num_graphs)):
         n = np.random.randint(n_range[0], n_range[1])
         g = nx.random_graphs.erdos_renyi_graph(n,p)
         while not nx.is_connected(g):
