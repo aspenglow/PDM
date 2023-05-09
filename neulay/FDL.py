@@ -54,7 +54,8 @@ log_path = args.log_path
 
 # layout save dir
 layout_dir = args.layout_dir 
-os.makedirs(layout_dir, exist_ok=True)
+if layout_dir is not None:
+    os.makedirs(layout_dir, exist_ok=True)
 
 # introduce graphs
 data_dir = args.data_dir
@@ -64,7 +65,7 @@ files = os.listdir(data_dir)
 if graphs_start_at > 1:
     files = files[graphs_start_at-1:]
 if graphs_num > -1:
-    files = os.listdir(data_dir)[:graphs_num]
+    files = files[:graphs_num]
 
 for f in tqdm(files, leave=False):
     G = nx.read_gpickle(os.path.join(data_dir, f))
@@ -158,7 +159,8 @@ for f in tqdm(files, leave=False):
         energy_hist_lin += [loss.detach().cpu().numpy()]
         # energy_hist_lin += [energy(outputsLin).detach().cpu().numpy()]
         # print(loss, " ", energy(outputsLin).detach().cpu().numpy())
-        write_log(log_path, 'Graph: ' + f + ' Finished training ' + str(i) + ' epoch: ' + str(epoch) + ' time: ' + str(tt.toc()) + ' energy: ' + str(energy_hist_lin[-1]) + "\n")
+        write_log(log_path, 'Graph: ' + f + ' Nodes: ' + str(N) + ' Finished training ' + str(i) + ' epoch: ' + str(epoch1) + \
+                ' time: ' + str(tt.toc()) + ' energy: ' + str(energy_hist[-1]) + "\n")
         # print('Finished training '+ str(i) + ' epoch: ' + str(epoch) + ' time: ' + str(tt.toc()) + ' energy: ' + str(energy_hist_lin[-1]))
         
         if energy_hist_lin[-1] < lowest_energy:
@@ -168,7 +170,8 @@ for f in tqdm(files, leave=False):
     
     write_log(log_path, "\n")
     graph_name = f.split('.')[0]
-    torch.save(best_outputs, os.path.join(layout_dir, graph_name + '.pt'))
+    if layout_dir is not None:
+        torch.save(best_outputs, os.path.join(layout_dir, graph_name + '.pt'))
     
     if args.csv_dir is not None:    
         d = pd.DataFrame(energy_hist_lin)
