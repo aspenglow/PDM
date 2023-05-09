@@ -37,7 +37,7 @@ class LatentGNN(nn.Module):
                     channel_multi=4, visible_GCN_nums=[1,1], 
                     mode='symmetric', without_residual=True, 
                     norm_layer=nn.LayerNorm, norm_func=F.normalize,
-                    graph_conv_flag=False):
+                    graph_conv_flag=False, device=None):
         super(LatentGNN, self).__init__()
         self.without_resisual = without_residual
         self.num_kernels = len(latent_dims)
@@ -47,27 +47,32 @@ class LatentGNN(nn.Module):
 
         latent_channel = in_features * channel_multi
 
+        if device==None:
+            device = ('cuda' if torch.cuda.is_available() else 'cpu')
+        self.device = torch.device(device)
+        
+
         # Reduce the channel dimension for efficiency
         if mode == 'asymmetric':
             self.down_channel_v2l = nn.Sequential(
                                     nn.Linear(in_features=in_features, 
                                             out_features=latent_channel, bias=False),
-                                    norm_layer(latent_channel),
-            )
+                                    norm_layer(latent_channel).to(self.device),
+            ).to(self.device)
 
             self.down_channel_l2v = nn.Sequential(
                                     nn.Linear(in_features=in_features, 
                                             out_features=latent_channel, bias=False),
-                                    norm_layer(latent_channel),
-            )
+                                    norm_layer(latent_channel).to(self.device),
+            ).to(self.device)
 
         elif mode == 'symmetric':   
             self.down_channel = nn.Sequential(
                                     nn.Linear(in_features=in_features, 
                                             out_features=latent_channel,
                                             bias=False),
-                                    norm_layer(latent_channel),
-            )
+                                    norm_layer(latent_channel).to(self.device),
+            ).to(self.device)
 
             # nn.init.kaiming_uniform_(self.down_channel[0].weight, a=1)
             # nn.init.kaiming_uniform_(self.down_channel[0].weight, mode='fan_in')
@@ -84,17 +89,17 @@ class LatentGNN(nn.Module):
                                                 norm_layer=norm_layer,
                                                 norm_func=norm_func,
                                                 mode=mode,
-                                                graph_conv_flag=graph_conv_flag))
+                                                graph_conv_flag=graph_conv_flag).to(self.device))
         # Increase the channel for the output
         self.up_channel = nn.Sequential(
                                     nn.Linear(in_features=latent_channel*self.num_kernels,
-                                                out_features=out_features, bias=False)
+                                                out_features=out_features, bias=False).to(self.device)
                                     
         )
         # self.up_channel = 
 
         # Residual Connection
-        self.gamma = nn.Parameter(torch.zeros(1))
+        self.gamma = nn.Parameter(torch.zeros(1).to(self.device))
     
     def forward(self, Adj, node_feature):
         # Adj: adjacency matrix of input graph
