@@ -96,6 +96,8 @@ def train(epoch, best_val_loss) -> float:
     model.train()
     
     average_train_loss = 0.
+    avg_train_pre_energy = 0.
+    avg_train_tru_energy = 0.
     for batch_idx, (Adj, feature, layout, graph_name) in tqdm(enumerate(train_loader), desc="train", total=len(train_loader), ncols=100, leave=False):
         optimizer.zero_grad()
         Adj = Adj.to(device)
@@ -114,12 +116,14 @@ def train(epoch, best_val_loss) -> float:
         loss.backward()
         
         average_train_loss += loss.item() / len(train_loader)
+        avg_train_pre_energy += predict_energy.item() / len(train_loader)
+        avg_train_tru_energy += truth_energy.item() / len(train_loader)
         
         graph_name = graph_name[0]
         log_string = "epoch "+str(epoch)+" graph "+str(batch_idx)+" "+graph_name+" N_nodes: "+str(N)+" loss: "+ str(loss.item()) + " p_energy: " + str(predict_energy.item()) + " t_energy: " + str(truth_energy.item())
         write_log(os.path.join(log_dir, "train_log.txt"), log_string + "\n")
     
-    log_string = "epoch "+str(epoch)+" average loss: "+str(average_train_loss)+"lr: "+str(scheduler.get_lr())
+    log_string = "epoch "+str(epoch)+" average loss: "+str(average_train_loss)+" avg pre energy: "+str(avg_train_pre_energy)+" avg truth energy: "+str(avg_train_tru_energy)+" lr: "+str(scheduler.get_last_lr()[0])
     write_log(os.path.join(log_dir, "train_log.txt"), log_string+"\n\n")
     write_log(os.path.join(log_dir, "train_log_summary.txt"), log_string+"\n")
     
@@ -129,6 +133,8 @@ def train(epoch, best_val_loss) -> float:
     # Validation
     model.eval()
     average_val_loss = 0.
+    avg_val_pre_energy = 0.
+    avg_val_tru_energy = 0.
     for batch_idx, (Adj, feature, layout, graph_name) in tqdm(enumerate(validation_loader), desc="val", total=len(validation_loader), ncols=100, leave=False):
         Adj = Adj.to(device)
         N = Adj.size(1)
@@ -143,13 +149,16 @@ def train(epoch, best_val_loss) -> float:
         # layout = torch.bmm(layout, R)
         # loss = one_norm_distance(predict_layout, layout)
         loss = torch.abs(predict_energy - truth_energy) / (N * N)
+        
         average_val_loss += loss.item() / len(validation_loader)
+        avg_val_pre_energy += predict_energy.item() / len(validation_loader)
+        avg_val_tru_energy += truth_energy.item() / len(validation_loader)
         
         graph_name = graph_name[0]
         log_string = "epoch "+str(epoch)+" graph "+str(batch_idx)+" "+graph_name+" N_nodes: "+str(N)+" loss: "+ str(loss.item()) + " p_energy: " + str(predict_energy.item()) + " t_energy: " + str(truth_energy.item())
         write_log(os.path.join(log_dir, "val_log.txt"), log_string + "\n")
     
-    log_string = "epoch "+str(epoch)+" average loss: "+str(average_val_loss)
+    log_string = "epoch "+str(epoch)+" average loss: "+str(average_val_loss)+" avg pre energy: "+str(avg_val_pre_energy)+" avg truth energy: "+str(avg_val_tru_energy)
     write_log(os.path.join(log_dir, "val_log.txt"), log_string+"\n\n")
     write_log(os.path.join(log_dir, "val_log_summary.txt"), log_string+"\n")
     
@@ -165,7 +174,11 @@ def test(model_load_path: str=None) -> float:
     if model_load_path is not None:
         model.load_state_dict(torch.load(model_load_path))
     model.eval()
+    
     average_test_loss = 0.
+    avg_test_pre_energy = 0.
+    avg_test_tru_energy = 0.
+    
     for batch_idx, (Adj, feature, layout, graph_name) in tqdm(enumerate(test_loader), desc="test", total=len(test_loader), ncols=100, leave=False):
         Adj = Adj.to(device)
         N = Adj.size(1)
@@ -180,13 +193,17 @@ def test(model_load_path: str=None) -> float:
         # layout = torch.bmm(layout, R)
         # loss = one_norm_distance(predict_layout, layout)
         loss = torch.abs(predict_energy - truth_energy) / (N * N)
+        
         average_test_loss += loss.item() / len(test_loader)
+        avg_test_pre_energy += predict_energy.item() / len(test_loader)
+        avg_test_tru_energy += truth_energy.item() / len(test_loader)
         
         graph_name = graph_name[0]
         log_string = " graph "+str(batch_idx)+" "+graph_name+" N_nodes: "+str(N)+" loss: "+ str(loss.item()) + " p_energy: " + str(predict_energy.item()) + " t_energy: " + str(truth_energy.item())
         write_log(os.path.join(log_dir, "test_log.txt"), log_string + "\n")
-        
-    write_log(os.path.join(log_dir, "test_log.txt"), "average loss: "+str(average_test_loss)+"\n\n")
+    
+    log_string = "average loss: "+str(average_test_loss)+" avg pre energy: "+str(avg_test_pre_energy)+" avg truth energy: "+str(avg_test_tru_energy)    
+    write_log(os.path.join(log_dir, "test_log.txt"), log_string+"\n\n")
     return average_test_loss
 
 
