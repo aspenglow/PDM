@@ -12,7 +12,7 @@ import math
 
 import sys
 sys.path.append(os.getcwd())
-from neulay.utils_neulay import *
+from utils.utils_neulay import *
 from neulay.neulay_model import *
 
 import argparse

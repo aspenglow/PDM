@@ -11,11 +11,11 @@ from tqdm import tqdm
 import sys
 sys.path.append(os.getcwd())
 from latentgnn.position_encoding import LapEncoding
-from latentgnn.utils_latentgnn import edge_list_to_tensor, graph_to_edge_list
+from utils.utils_latentgnn import edge_list_to_tensor, graph_to_edge_list
 from latentgnn.latentgnn_v1 import LatentGNN
-from dataset import LayoutDataset
-from utils import load_data, one_norm_distance, write_log
-from neulay.utils_neulay import energy 
+from utils.dataset import LayoutDataset
+from utils.utils import load_data, one_norm_distance, write_log
+from utils.utils_neulay import energy 
 
 
 import argparse

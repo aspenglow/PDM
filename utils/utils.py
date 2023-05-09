@@ -6,11 +6,13 @@ import os
 import numpy as np
 import time
 
+import sys
+sys.path.append(os.getcwd())
 from latentgnn.position_encoding import LapEncoding
-from latentgnn.utils_latentgnn import edge_list_to_tensor, graph_to_edge_list
+from utils.utils_latentgnn import edge_list_to_tensor, graph_to_edge_list
 from latentgnn.latentgnn_v1 import LatentGNN
-from dataset import LayoutDataset
-from neulay.utils_neulay import energy 
+from utils.dataset import LayoutDataset
+from utils.utils_neulay import energy 
 
 
 def load_data(graph_root_dir, layout_root_dir, dataset_ratio, encoding_dim):

@@ -2,10 +2,14 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import networkx as nx
-from latentgnn.position_encoding import LapEncoding
-from latentgnn.utils_latentgnn import graph_to_edge_list, edge_list_to_tensor
 import os
 import numpy as np
+import sys
+sys.path.append(os.getcwd())
+
+from latentgnn.position_encoding import LapEncoding
+from utils.utils_latentgnn import graph_to_edge_list, edge_list_to_tensor
+
 
 class LayoutDataset(Dataset):
     def __init__(self, graph_root_dir="graphs", layout_root_dir="layouts", encoding_dim=20):
