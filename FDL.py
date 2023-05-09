@@ -160,7 +160,7 @@ for f in tqdm(files, leave=False):
         # energy_hist_lin += [energy(outputsLin).detach().cpu().numpy()]
         # print(loss, " ", energy(outputsLin).detach().cpu().numpy())
         write_log(log_path, 'Graph: ' + f + ' Nodes: ' + str(N) + ' Finished training ' + str(i) + ' epoch: ' + str(epoch1) + \
-                ' time: ' + str(tt.toc()) + ' energy: ' + str(energy_hist[-1]) + "\n")
+                ' time: ' + str(tt.toc()) + ' energy: ' + str(energy_hist_lin[-1]) + "\n")
         # print('Finished training '+ str(i) + ' epoch: ' + str(epoch) + ' time: ' + str(tt.toc()) + ' energy: ' + str(energy_hist_lin[-1]))
         
         if energy_hist_lin[-1] < lowest_energy:
