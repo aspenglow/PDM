@@ -7,7 +7,7 @@ import numpy as np
 import sys
 sys.path.append(os.getcwd())
 
-from latentgnn.position_encoding import LapEncoding
+from utils.position_encoding import LapEncoding
 from utils.utils_latentgnn import graph_to_edge_list, edge_list_to_tensor
 
 

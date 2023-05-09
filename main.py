@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 import sys
 sys.path.append(os.getcwd())
-from latentgnn.position_encoding import LapEncoding
+from utils.position_encoding import LapEncoding
 from utils.utils_latentgnn import edge_list_to_tensor, graph_to_edge_list
 from latentgnn.latentgnn_v1 import LatentGNN
 from utils.dataset import LayoutDataset
