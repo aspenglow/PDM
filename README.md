@@ -10,7 +10,7 @@ python graph_generate.py
 ## 2. Compute final graph layout with FDL algorithm
 
 ```shell
-python neulay/neulay_2.py
+python neulay_2.py
 ```
 
 ## 3. Train and test model to predict final layouts given different graph structures
