@@ -20,7 +20,7 @@ parser = argparse.ArgumentParser(
     'Force-Directed Layout algorithm to calculate final layout given a graph.')
 parser.add_argument('--data-dir', type=str, default="graphs/erdos_renyi",
                     help='Path to load graphs.')
-parser.add_argument('--graphs-num', type=int, default=0,
+parser.add_argument('--graphs-num', type=int, default=-1,
                     help='Number of graph to train. -1 means load all of graphs in data-dir.')
 parser.add_argument('--graphs-start-at', type=int, default=1,
                     help='From which picture to start training.')
@@ -60,7 +60,7 @@ if layout_dir is not None:
 # introduce graphs
 data_dir = args.data_dir
 graphs_start_at = args.graphs_start_at
-graphs_num = args.graph_num
+graphs_num = args.graphs_num
 files = os.listdir(data_dir)
 if graphs_start_at > 1:
     files = files[graphs_start_at-1:]
@@ -159,7 +159,7 @@ for f in tqdm(files, leave=False):
         energy_hist_lin += [loss.detach().cpu().numpy()]
         # energy_hist_lin += [energy(outputsLin).detach().cpu().numpy()]
         # print(loss, " ", energy(outputsLin).detach().cpu().numpy())
-        write_log(log_path, 'Graph: ' + f + ' Nodes: ' + str(N) + ' Finished training ' + str(i) + ' epoch: ' + str(epoch1) + \
+        write_log(log_path, 'Graph: ' + f + ' Nodes: ' + str(N) + ' Finished training ' + str(i) + ' epoch: ' + str(epoch) + \
                 ' time: ' + str(tt.toc()) + ' energy: ' + str(energy_hist_lin[-1]) + "\n")
         # print('Finished training '+ str(i) + ' epoch: ' + str(epoch) + ' time: ' + str(tt.toc()) + ' energy: ' + str(energy_hist_lin[-1]))
         
