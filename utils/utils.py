@@ -31,7 +31,8 @@ def load_data(graph_root_dir, layout_root_dir, dataset_ratio, encoding_dim):
 
 def one_norm_distance(layout, prediction_layout, variance=5e-5) -> torch.Tensor:
     neg_log_p = (torch.abs(layout - prediction_layout) / (2 * variance))
-    return neg_log_p.sum() / (prediction_layout.size(1) * prediction_layout.size(2))
+    N = prediction_layout.size(1)
+    return neg_log_p.sum() / (N * N)
 
 
 def write_log(log_path, string):

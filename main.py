@@ -44,7 +44,7 @@ parser.add_argument('--channel-multi', type=int, default=20,
                     help='How many multiple channels in latent space compare with visible space.')
 parser.add_argument('--epochs', type=int, default=50,
                     help='Numer of epoch to train.')
-parser.add_argument('--gamma', type=float, default=0.9,
+parser.add_argument('--gamma', type=float, default=0.95,
                     help='Parameter to decay the learning rate per epoch.')
 parser.add_argument('--use-gpu', type=bool, default=True,
                     help='Use gpu to training.')
@@ -86,9 +86,10 @@ if model_load_path is not None:
     model.load_state_dict(torch.load(model_load_path))
 model.to(device)
 
-optimizer = torch.optim.Adam(model.parameters(), 0.01) # 优化器
+optimizer = torch.optim.Adam(model.parameters(), lr=0.01) # 优化器
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=gamma)
 criterion = one_norm_distance
+
 
 def train(epoch, best_val_loss) -> float:
     # Training
@@ -98,29 +99,29 @@ def train(epoch, best_val_loss) -> float:
     for batch_idx, (Adj, feature, layout, graph_name) in tqdm(enumerate(train_loader), desc="train", total=len(train_loader), ncols=100, leave=False):
         optimizer.zero_grad()
         Adj = Adj.to(device)
+        N = Adj.size(1)
         feature = feature.to(device)
         predict_layout = model(Adj, feature)
         adjacency_list = torch.where(torch.triu(Adj[0]))
-        predict_energy = energy(predict_layout[0], adjacency_list, len(Adj[0]))
-        truth_energy = energy(layout[0], adjacency_list, len(Adj[0]))
+        predict_energy = energy(predict_layout[0], adjacency_list, N)
+        truth_energy = energy(layout[0], adjacency_list, N)
         # print("predict: ", predict_energy, " truth: ", truth_energy)
         R = orthogonal_procrustes(layout[0].to('cpu').detach().numpy(), predict_layout[0].to('cpu').detach().numpy())[0]
         R = torch.from_numpy(R).unsqueeze(0)
         # layout = torch.bmm(layout, R)
         # loss = one_norm_distance(predict_layout, layout)
-        loss = torch.abs(predict_energy - truth_energy) / (layout.size(0) * layout.size(1))
+        loss = torch.abs(predict_energy - truth_energy) / (N * N)
         loss.backward()
-        
-        optimizer.step()
-        scheduler.step()
-        
         
         average_train_loss += loss.item() / len(train_loader)
         
         graph_name = graph_name[0]
-        log_string = "epoch "+str(epoch)+" graph "+str(batch_idx)+" "+graph_name+" N_nodes: "+str(len(Adj[0]))+" loss: "+ str(loss.item()) + " p_energy: " + str(predict_energy.item()) + " t_energy: " + str(truth_energy.item())
+        log_string = "epoch "+str(epoch)+" graph "+str(batch_idx)+" "+graph_name+" N_nodes: "+str(N)+" loss: "+ str(loss.item()) + " p_energy: " + str(predict_energy.item()) + " t_energy: " + str(truth_energy.item())
         write_log(os.path.join(log_dir, "train_log.txt"), log_string + "\n")
          
+    optimizer.step()
+    scheduler.step()
+    
     log_string = "epoch "+str(epoch)+" average loss: "+str(average_train_loss)
     write_log(os.path.join(log_dir, "train_log.txt"), log_string+"\n\n")
     write_log(os.path.join(log_dir, "train_log_summary.txt"), log_string+"\n")
@@ -131,21 +132,22 @@ def train(epoch, best_val_loss) -> float:
     average_val_loss = 0.
     for batch_idx, (Adj, feature, layout, graph_name) in tqdm(enumerate(validation_loader), desc="val", total=len(validation_loader), ncols=100, leave=False):
         Adj = Adj.to(device)
+        N = Adj.size(1)
         feature = feature.to(device)
         predict_layout = model(Adj, feature)
         adjacency_list = torch.where(torch.triu(Adj[0]))
-        predict_energy = energy(predict_layout[0], adjacency_list, len(Adj[0]))
-        truth_energy = energy(layout[0], adjacency_list, len(Adj[0]))
+        predict_energy = energy(predict_layout[0], adjacency_list, N)
+        truth_energy = energy(layout[0], adjacency_list, N)
         # print("predict: ", predict_energy, " truth: ", truth_energy)
         R = orthogonal_procrustes(layout[0].to('cpu').detach().numpy(), predict_layout[0].to('cpu').detach().numpy())[0]
         R = torch.from_numpy(R).unsqueeze(0)
         # layout = torch.bmm(layout, R)
         # loss = one_norm_distance(predict_layout, layout)
-        loss = torch.abs(predict_energy - truth_energy) / (layout.size(0) * layout.size(1))
+        loss = torch.abs(predict_energy - truth_energy) / (N * N)
         average_val_loss += loss.item() / len(validation_loader)
         
         graph_name = graph_name[0]
-        log_string = "epoch "+str(epoch)+" graph "+str(batch_idx)+" "+graph_name+" N_nodes: "+str(len(Adj[0]))+" loss: "+ str(loss.item()) + " p_energy: " + str(predict_energy.item()) + " t_energy: " + str(truth_energy.item())
+        log_string = "epoch "+str(epoch)+" graph "+str(batch_idx)+" "+graph_name+" N_nodes: "+str(N)+" loss: "+ str(loss.item()) + " p_energy: " + str(predict_energy.item()) + " t_energy: " + str(truth_energy.item())
         write_log(os.path.join(log_dir, "val_log.txt"), log_string + "\n")
     
     log_string = "epoch "+str(epoch)+" average loss: "+str(average_val_loss)
@@ -158,6 +160,7 @@ def train(epoch, best_val_loss) -> float:
             os.makedirs(model_save_dir, exist_ok=True)
             torch.save(model.state_dict(), os.path.join(model_save_dir, "model.pt"))
     return average_val_loss
+   
     
 def test(model_load_path: str=None) -> float:
     if model_load_path is not None:
@@ -166,25 +169,27 @@ def test(model_load_path: str=None) -> float:
     average_test_loss = 0.
     for batch_idx, (Adj, feature, layout, graph_name) in tqdm(enumerate(test_loader), desc="test", total=len(test_loader), ncols=100, leave=False):
         Adj = Adj.to(device)
+        N = Adj.size(1)
         feature = feature.to(device)
         predict_layout = model(Adj, feature)
         adjacency_list = torch.where(torch.triu(Adj[0]))
-        predict_energy = energy(predict_layout[0], adjacency_list, len(Adj[0]))
-        truth_energy = energy(layout[0], adjacency_list, len(Adj[0]))
+        predict_energy = energy(predict_layout[0], adjacency_list, N)
+        truth_energy = energy(layout[0], adjacency_list, N)
         # print("predict: ", predict_energy, " truth: ", truth_energy)
         R = orthogonal_procrustes(layout[0].to('cpu').detach().numpy(), predict_layout[0].to('cpu').detach().numpy())[0]
         R = torch.from_numpy(R).unsqueeze(0)
         # layout = torch.bmm(layout, R)
         # loss = one_norm_distance(predict_layout, layout)
-        loss = torch.abs(predict_energy - truth_energy) / (layout.size(0) * layout.size(1))
+        loss = torch.abs(predict_energy - truth_energy) / (N * N)
         average_test_loss += loss.item() / len(test_loader)
         
         graph_name = graph_name[0]
-        log_string = " graph "+str(batch_idx)+" "+graph_name+" N_nodes: "+str(len(Adj[0]))+" loss: "+ str(loss.item()) + " p_energy: " + str(predict_energy.item()) + " t_energy: " + str(truth_energy.item())
+        log_string = " graph "+str(batch_idx)+" "+graph_name+" N_nodes: "+str(N)+" loss: "+ str(loss.item()) + " p_energy: " + str(predict_energy.item()) + " t_energy: " + str(truth_energy.item())
         write_log(os.path.join(log_dir, "test_log.txt"), log_string + "\n")
         
     write_log(os.path.join(log_dir, "test_log.txt"), "average loss: "+str(average_test_loss)+"\n\n")
     return average_test_loss
+
 
 def main():
     best_val_loss = np.inf
@@ -200,6 +205,7 @@ def main():
     
     average_test_loss = test()
     print("Test average loss: ", average_test_loss)
+    
     
 if __name__ == "__main__":
     main()
