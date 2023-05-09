@@ -6,3 +6,4 @@ graphs/
 layouts/
 __pycache__
 log
+*.pt

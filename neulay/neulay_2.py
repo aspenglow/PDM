@@ -20,9 +20,9 @@ parser = argparse.ArgumentParser(
     'Force-Directed Layout algorithm to calculate final layout given a graph.')
 parser.add_argument('--data-dir', type=str, default="graphs/erdos_renyi",
                     help='Path to load graphs.')
-parser.add_argument('--graph-num', type=int, default=-1,
+parser.add_argument('--graphs-num', type=int, default=-1,
                     help='Number of graph to train. -1 means load all of graphs in data-dir.')
-parser.add_argument('--graphs-start-at', type=int, default=0,
+parser.add_argument('--graphs-start-at', type=int, default=1,
                     help='From which picture to start training.')
 parser.add_argument('--layout-dir', type=str, default="layouts/erdos_renyi",
                     help='Path to save trained graph layouts.')
@@ -60,10 +60,10 @@ if layout_dir is not None:
 # import graphs
 data_dir = args.data_dir
 graphs_start_at = args.graphs_start_at
-graphs_num = args.graph_num
+graphs_num = args.graphs_num
 files = os.listdir(data_dir)
-if graphs_start_at > 0:
-    files = files[graphs_start_at:]
+if graphs_start_at > 1:
+    files = files[graphs_start_at-1:]
 if graphs_num > -1:
     files = files[:graphs_num]
     
