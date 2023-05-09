@@ -118,14 +118,13 @@ def train(epoch, best_val_loss) -> float:
         graph_name = graph_name[0]
         log_string = "epoch "+str(epoch)+" graph "+str(batch_idx)+" "+graph_name+" N_nodes: "+str(N)+" loss: "+ str(loss.item()) + " p_energy: " + str(predict_energy.item()) + " t_energy: " + str(truth_energy.item())
         write_log(os.path.join(log_dir, "train_log.txt"), log_string + "\n")
-         
-    optimizer.step()
-    scheduler.step()
     
-    log_string = "epoch "+str(epoch)+" average loss: "+str(average_train_loss)
+    log_string = "epoch "+str(epoch)+" average loss: "+str(average_train_loss)+"lr: "+str(scheduler.get_lr())
     write_log(os.path.join(log_dir, "train_log.txt"), log_string+"\n\n")
     write_log(os.path.join(log_dir, "train_log_summary.txt"), log_string+"\n")
     
+    optimizer.step()
+    scheduler.step()
     
     # Validation
     model.eval()
