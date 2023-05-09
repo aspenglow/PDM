@@ -30,9 +30,11 @@ class LayoutDataset(Dataset):
                 break
             index -= num_graphs
             dir_index += 1
-            
-        graph_path = os.path.join(self.graph_dirs[dir_index], os.listdir(self.graph_dirs[dir_index])[index])
-        layout_path = os.path.join(self.layout_dirs[dir_index], os.listdir(self.layout_dirs[dir_index])[index])
+        
+        graph_name = os.listdir(self.graph_dirs[dir_index])[index]
+        graph_name = graph_name.split(".")[0]
+        graph_path = os.path.join(self.graph_dirs[dir_index], graph_name+".pkl")
+        layout_path = os.path.join(self.layout_dirs[dir_index], graph_name+".pt")
         graph = nx.read_gpickle(graph_path)
         lapEncoding = LapEncoding(dim=self.encoding_dim)
         graph.edge_index = edge_list_to_tensor(graph_to_edge_list(graph))
@@ -46,7 +48,7 @@ class LayoutDataset(Dataset):
         Adj_norm = Adj_norm.float()
         
         layout =  torch.load(layout_path)
-        return Adj_norm, encoding, layout
+        return Adj_norm, encoding, layout, graph_name
     
     def __len__(self):
         return sum(len(os.listdir(path)) for path in self.graph_dirs)

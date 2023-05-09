@@ -81,26 +81,29 @@ def train(epoch):
     model.train()
     
     average_loss = 0.
-    for batch_idx, (Adj, feature, layout) in tqdm(enumerate(train_loader), desc="train", leave=False):
+    for batch_idx, (Adj, feature, layout, graph_name) in tqdm(enumerate(train_loader), desc="train", total=len(train_loader), ncols=100, leave=False):
         optimizer.zero_grad()
         Adj = Adj.to(device)
         feature = feature.to(device)
         predict_layout = model(Adj, feature)
-        adjacency_list = torch.where(torch.triu(torch.tensor(Adj[0])))
+        adjacency_list = torch.where(torch.triu(Adj[0]))
         predict_energy = energy(predict_layout[0], adjacency_list, len(Adj[0]))
         truth_energy = energy(layout[0], adjacency_list, len(Adj[0]))
         # print("predict: ", predict_energy, " truth: ", truth_energy)
-        R = orthogonal_procrustes(layout[0].detach().numpy(), predict_layout[0].detach().numpy())[0]
+        R = orthogonal_procrustes(layout[0].to('cpu').detach().numpy(), predict_layout[0].to('cpu').detach().numpy())[0]
         R = torch.from_numpy(R).unsqueeze(0)
         # layout = torch.bmm(layout, R)
         # loss = one_norm_distance(predict_layout, layout)
         loss = torch.abs(predict_energy - truth_energy) / (layout.size(0) * layout.size(1))
         loss.backward()
-        scheduler.step()
+        
         optimizer.step()
+        scheduler.step()
+        
         
         average_loss += loss.item() / len(train_loader)
-        log_string = "epoch "+str(epoch)+" graph "+str(batch_idx)+" N_nodes: "+str(len(Adj[0]))+" loss: "+ str(loss.item()) + " p_energy: " + str(predict_energy.item()) + " t_energy: " + str(truth_energy.item())
+        
+        log_string = "epoch "+str(epoch)+" graph "+str(batch_idx)+" "+str(graph_name)+" N_nodes: "+str(len(Adj[0]))+" loss: "+ str(loss.item()) + " p_energy: " + str(predict_energy.item()) + " t_energy: " + str(truth_energy.item())
         write_log(os.path.join(log_dir, "train_log.txt"), log_string + "\n")
         
     write_log(os.path.join(log_dir, "train_log.txt"), "average loss: "+str(average_loss)+"\n\n")
@@ -108,9 +111,9 @@ def train(epoch):
     
     model.eval()
     average_loss = 0.
-    for batch_idx, (Adj, feature, layout) in tqdm(enumerate(validation_loader), desc="val", leave=False):
+    for batch_idx, (Adj, feature, layout, graph_name) in tqdm(enumerate(validation_loader), desc="val", total=len(validation_loader), ncols=100, leave=False):
         predict_layout = model(Adj, feature)
-        adjacency_list = torch.where(torch.triu(torch.tensor(Adj[0])))
+        adjacency_list = torch.where(torch.triu(Adj[0]))
         predict_energy = energy(predict_layout[0], adjacency_list, len(Adj[0]))
         truth_energy = energy(layout[0], adjacency_list, len(Adj[0]))
         # print("predict: ", predict_energy, " truth: ", truth_energy)
@@ -121,16 +124,16 @@ def train(epoch):
         loss = torch.abs(predict_energy - truth_energy) / (layout.size(0) * layout.size(1))
         average_loss += loss.item() / len(validation_loader)
         
-        log_string = "epoch "+str(epoch)+" graph "+str(batch_idx)+" N_nodes: "+str(len(Adj[0]))+" loss: "+ str(loss.item()) + " p_energy: " + str(predict_energy.item()) + " t_energy: " + str(truth_energy.item())
+        log_string = "epoch "+str(epoch)+" graph "+str(batch_idx)+" "+graph_name+" N_nodes: "+str(len(Adj[0]))+" loss: "+ str(loss.item()) + " p_energy: " + str(predict_energy.item()) + " t_energy: " + str(truth_energy.item())
         write_log(os.path.join(log_dir, "val_log.txt"), log_string + "\n")
     write_log(os.path.join(log_dir, "val_log.txt"), "average loss: "+str(average_loss)+"\n\n")
     
 def test():
     model.eval()
     average_loss = 0.
-    for batch_idx, (Adj, feature, layout) in tqdm(enumerate(test_loader), desc="test", leave=False):
+    for batch_idx, (Adj, feature, layout, graph_name) in tqdm(enumerate(test_loader), desc="test", total=len(test_loader), ncols=100, leave=False):
         predict_layout = model(Adj, feature)
-        adjacency_list = torch.where(torch.triu(torch.tensor(Adj[0])))
+        adjacency_list = torch.where(torch.triu(Adj[0]))
         predict_energy = energy(predict_layout[0], adjacency_list, len(Adj[0]))
         truth_energy = energy(layout[0], adjacency_list, len(Adj[0]))
         # print("predict: ", predict_energy, " truth: ", truth_energy)
@@ -141,16 +144,17 @@ def test():
         loss = torch.abs(predict_energy - truth_energy) / (layout.size(0) * layout.size(1))
         average_loss += loss.item() / len(test_loader)
         
-        log_string = " graph "+str(batch_idx)+" N_nodes: "+str(len(Adj[0]))+" loss: "+ str(loss.item()) + " p_energy: " + str(predict_energy.item()) + " t_energy: " + str(truth_energy.item())
+        log_string = " graph "+str(batch_idx)+" "+graph_name+" N_nodes: "+str(len(Adj[0]))+" loss: "+ str(loss.item()) + " p_energy: " + str(predict_energy.item()) + " t_energy: " + str(truth_energy.item())
         write_log(os.path.join(log_dir, "test_log.txt"), log_string + "\n")
         
     write_log(os.path.join(log_dir, "test_log.txt"), "average loss: "+str(average_loss)+"\n\n")
 
 def main():
     os.makedirs(log_dir, exist_ok=True)
-    for epoch in tqdm(range(epochs)):
+    for epoch in tqdm(range(epochs), desc="epoch", ncols=80, leave=False):
         train(epoch)
     test()
     
 if __name__ == "__main__":
+    print(len(os.listdir("layouts/erdos_renyi")), len(os.listdir("layouts/sbm")))
     main()
