@@ -27,7 +27,7 @@ def load_data(graph_root_dir, layout_root_dir, dataset_ratio, encoding_dim):
     validate_loader = DataLoader(validate_dataset, batch_size=1, shuffle=False, num_workers=0)
     test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=0)
     print("train set:", len(train_loader), " val set:", len(validate_loader), " test set:", len(test_loader))
-    return train_loader, validate_loader, test_loader
+    return data_loader, train_loader, validate_loader, test_loader
 
 def one_norm_distance(layout, prediction_layout, variance=5e-5) -> torch.Tensor:
     neg_log_p = (torch.abs(layout - prediction_layout) / (2 * variance))

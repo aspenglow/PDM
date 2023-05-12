@@ -26,6 +26,8 @@ parser.add_argument('--graph-root-dir', type=str, default="graphs/",
                     help='Root path to load graphs.')
 parser.add_argument('--layout-root-dir', type=str, default="layouts/",
                     help='Root path to load final layouts.')
+parser.add_argument('--output-root-dir', type=str, default="outputs/",
+                    help='Root path to save predicted final layouts.')
 parser.add_argument('--model-save-dir', type=str, default="model/",
                     help='Dir to save best model.')
 parser.add_argument('--model-load-path', type=str, default=None,
@@ -38,27 +40,34 @@ parser.add_argument('--val-set-ratio', type=float, default=0.2,
                     help='Ratio of validation set.')
 parser.add_argument('--position-encoding-dim', type=int, default=100,
                     help='Dim of graph position encoding as input feature.')
-parser.add_argument('--latent-dims', type=list, default=[50,50,50],
+parser.add_argument('--latent-dims', type=list, default=[100,100,100],
                     help='Number of nodes for each latent graph layer.')
-parser.add_argument('--channel-multi', type=int, default=20,
+parser.add_argument('--channel-multi', type=int, default=10,
                     help='How many multiple channels in latent space compare with visible space.')
 parser.add_argument('--epochs', type=int, default=50,
                     help='Numer of epoch to train.')
-parser.add_argument('--gamma', type=float, default=0.95,
+parser.add_argument('--gamma', type=float, default=0.9,
                     help='Parameter to decay the learning rate per epoch.')
-parser.add_argument('--use-gpu', type=bool, default=True,
+parser.add_argument('--only-cpu', action="store_true",
                     help='Use gpu to training.')
+parser.add_argument('--no-train', action="store_true",
+                    help='If train model.')
+parser.add_argument('--no-test', action="store_true",
+                    help='If test model.')
+parser.add_argument('--no-predict', action="store_true",
+                    help='If use trained model to predict and save graph layout.')
 
 args = parser.parse_args()
 
-if args.use_gpu:
+if args.only_cpu:
+    device = 'cpu'
+else:
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-else:
-    device = 'cpu'
 
 graph_root_dir = args.graph_root_dir
 layout_root_dir = args.layout_root_dir
+output_root_dir = args.output_root_dir
 model_save_dir = args.model_save_dir
 model_load_path = args.model_load_path
 
@@ -77,8 +86,12 @@ gamma = args.gamma
 log_dir = args.log_dir
 os.makedirs(log_dir, exist_ok=True)
 
+no_train = args.no_train
+no_test = args.no_test
+no_predict = args.no_predict
+
 # Load dataloader
-train_loader, validation_loader, test_loader = load_data(graph_root_dir, layout_root_dir, dataset_ratio, encoding_dim)
+data_loader, train_loader, validation_loader, test_loader = load_data(graph_root_dir, layout_root_dir, dataset_ratio, encoding_dim)
 
 # Initialize models
 model = LatentGNN(in_features=encoding_dim, out_features=3, latent_dims=latent_dims, channel_multi=channel_multi)  # 加载模型
@@ -102,6 +115,7 @@ def train(epoch, best_val_loss) -> float:
         optimizer.zero_grad()
         Adj = Adj.to(device)
         N = Adj.size(1)
+        layout = layout.to(device)
         feature = feature.to(device)
         predict_layout = model(Adj, feature)
         adjacency_list = torch.where(torch.triu(Adj[0]))
@@ -109,10 +123,10 @@ def train(epoch, best_val_loss) -> float:
         truth_energy = energy(layout[0], adjacency_list, N)
         # print("predict: ", predict_energy, " truth: ", truth_energy)
         R = orthogonal_procrustes(layout[0].to('cpu').detach().numpy(), predict_layout[0].to('cpu').detach().numpy())[0]
-        R = torch.from_numpy(R).unsqueeze(0)
-        # layout = torch.bmm(layout, R)
-        # loss = one_norm_distance(predict_layout, layout)
-        loss = torch.abs(predict_energy - truth_energy) / (N * N)
+        R = torch.from_numpy(R).unsqueeze(0).to(device)
+        layout = torch.bmm(layout, R)
+        loss = one_norm_distance(predict_layout, layout)
+        # loss = torch.abs(predict_energy - truth_energy) / (N * N)
         loss.backward()
         
         average_train_loss += loss.item() / len(train_loader)
@@ -139,13 +153,14 @@ def train(epoch, best_val_loss) -> float:
         Adj = Adj.to(device)
         N = Adj.size(1)
         feature = feature.to(device)
+        layout = layout.to(device)
         predict_layout = model(Adj, feature)
         adjacency_list = torch.where(torch.triu(Adj[0]))
         predict_energy = energy(predict_layout[0], adjacency_list, N)
         truth_energy = energy(layout[0], adjacency_list, N)
         # print("predict: ", predict_energy, " truth: ", truth_energy)
         R = orthogonal_procrustes(layout[0].to('cpu').detach().numpy(), predict_layout[0].to('cpu').detach().numpy())[0]
-        R = torch.from_numpy(R).unsqueeze(0)
+        R = torch.from_numpy(R).unsqueeze(0).to(device)
         # layout = torch.bmm(layout, R)
         # loss = one_norm_distance(predict_layout, layout)
         loss = torch.abs(predict_energy - truth_energy) / (N * N)
@@ -183,16 +198,17 @@ def test(model_load_path: str=None) -> float:
         Adj = Adj.to(device)
         N = Adj.size(1)
         feature = feature.to(device)
+        layout = layout.to(device)
         predict_layout = model(Adj, feature)
         adjacency_list = torch.where(torch.triu(Adj[0]))
         predict_energy = energy(predict_layout[0], adjacency_list, N)
         truth_energy = energy(layout[0], adjacency_list, N)
         # print("predict: ", predict_energy, " truth: ", truth_energy)
         R = orthogonal_procrustes(layout[0].to('cpu').detach().numpy(), predict_layout[0].to('cpu').detach().numpy())[0]
-        R = torch.from_numpy(R).unsqueeze(0)
-        # layout = torch.bmm(layout, R)
-        # loss = one_norm_distance(predict_layout, layout)
-        loss = torch.abs(predict_energy - truth_energy) / (N * N)
+        R = torch.from_numpy(R).unsqueeze(0).to(device)
+        layout = torch.bmm(layout, R)
+        loss = one_norm_distance(predict_layout, layout)
+        # loss = torch.abs(predict_energy - truth_energy) / (N * N)
         
         average_test_loss += loss.item() / len(test_loader)
         avg_test_pre_energy += predict_energy.item() / len(test_loader)
@@ -206,22 +222,72 @@ def test(model_load_path: str=None) -> float:
     write_log(os.path.join(log_dir, "test_log.txt"), log_string+"\n\n")
     return average_test_loss
 
+def predict(model_load_path: str=None):
+    if model_load_path is not None:
+        model.load_state_dict(torch.load(model_load_path))
+    model.eval()
+    
+    average_predict_loss = 0.
+    avg_predict_pre_energy = 0.
+    avg_predict_tru_energy = 0.
+    
+    dirs = os.listdir(layout_root_dir)
+    for dir in dirs:
+        os.makedirs(os.path.join(output_root_dir, dir), exist_ok=True)
+
+    for batch_idx, (Adj, feature, layout, graph_name) in tqdm(enumerate(data_loader), desc="predict", total=len(data_loader), ncols=100, leave=False):
+        Adj = Adj.to(device)
+        N = Adj.size(1)
+        feature = feature.to(device)
+        layout = layout.to(device)
+        predict_layout = model(Adj, feature)
+        adjacency_list = torch.where(torch.triu(Adj[0]))
+        predict_energy = energy(predict_layout[0], adjacency_list, N)
+        truth_energy = energy(layout[0], adjacency_list, N)
+        # print("predict: ", predict_energy, " truth: ", truth_energy)
+        R = orthogonal_procrustes(layout[0].to('cpu').detach().numpy(), predict_layout[0].to('cpu').detach().numpy())[0]
+        R = torch.from_numpy(R).unsqueeze(0).to(device)
+        layout = torch.bmm(layout, R)
+        loss = one_norm_distance(predict_layout, layout)
+        # loss = torch.abs(predict_energy - truth_energy) / (N * N)
+        
+        average_predict_loss += loss.item() / len(test_loader)
+        avg_predict_pre_energy += predict_energy.item() / len(test_loader)
+        avg_predict_tru_energy += truth_energy.item() / len(test_loader)
+        
+        graph_name: str = graph_name[0]
+        if graph_name.startswith("er"):
+            torch.save(predict_layout, os.path.join(output_root_dir, "erdos_renyi", graph_name+".pt"))
+        elif graph_name.startswith("sbm"):
+            torch.save(predict_layout, os.path.join(output_root_dir, "sbm", graph_name+".pt"))
+
+        log_string = " graph "+str(batch_idx)+" "+graph_name+" N_nodes: "+str(N)+" loss: "+ str(loss.item()) + " p_energy: " + str(predict_energy.item()) + " t_energy: " + str(truth_energy.item())
+        write_log(os.path.join(log_dir, "predict_log.txt"), log_string + "\n")
+    
+    
+    log_string = "average loss: "+str(average_predict_loss)+" avg pre energy: "+str(avg_predict_pre_energy)+" avg truth energy: "+str(avg_predict_tru_energy)    
+    write_log(os.path.join(log_dir, "predict_log.txt"), log_string+"\n\n")    
 
 def main():
-    best_val_loss = np.inf
-    best_epoch = -1
-    for epoch in tqdm(range(epochs), desc="epoch", ncols=80):
-        average_val_loss = train(epoch, best_val_loss)
-        if average_val_loss < best_val_loss:
-            best_val_loss = average_val_loss
-            best_epoch = epoch
-    log_string = "Best model epoch: "+str(best_epoch)+" average val loss: "+str(best_val_loss)
-    print(log_string)
-    write_log(os.path.join(log_dir, "val_log.txt"), log_string+"\n\n")        
+    print(no_train, no_test, no_predict)
+    if not no_train:
+        best_val_loss = np.inf
+        best_epoch = -1
+        for epoch in tqdm(range(epochs), desc="epoch", ncols=80):
+            average_val_loss = train(epoch, best_val_loss)
+            if average_val_loss < best_val_loss:
+                best_val_loss = average_val_loss
+                best_epoch = epoch
+        log_string = "Best model epoch: "+str(best_epoch)+" average val loss: "+str(best_val_loss)
+        print(log_string)
+        write_log(os.path.join(log_dir, "val_log.txt"), log_string+"\n\n")        
     
-    average_test_loss = test()
-    print("Test average loss: ", average_test_loss)
+    if not no_test:
+        average_test_loss = test()
+        print("Test average loss: ", average_test_loss)
     
+    if not no_predict:
+        predict("model_energy/model.pt")
     
 if __name__ == "__main__":
     main()

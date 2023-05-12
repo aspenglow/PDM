@@ -4,6 +4,7 @@ graphs/
 .vscode
 *.txt
 layouts/
+outputs/
 __pycache__
 log
 *.pt
