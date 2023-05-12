@@ -105,11 +105,6 @@ model.to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01) # 优化器
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=gamma)
-if args.loss == "energy":
-    criterion = energy
-else:
-    criterion = one_norm_distance
-
 
 def train(epoch, best_val_loss) -> float:
     # Training
@@ -169,12 +164,13 @@ def train(epoch, best_val_loss) -> float:
         adjacency_list = torch.where(torch.triu(Adj[0]))
         predict_energy = energy(predict_layout[0], adjacency_list, N)
         truth_energy = energy(layout[0], adjacency_list, N)
-        # print("predict: ", predict_energy, " truth: ", truth_energy)
-        R = orthogonal_procrustes(layout[0].to('cpu').detach().numpy(), predict_layout[0].to('cpu').detach().numpy())[0]
-        R = torch.from_numpy(R).unsqueeze(0).to(device)
-        # layout = torch.bmm(layout, R)
-        # loss = one_norm_distance(predict_layout, layout)
-        loss = torch.abs(predict_energy - truth_energy) / (N * N)
+        if args.loss == "energy":
+            loss = torch.abs(predict_energy - truth_energy) / (N * N)
+        elif args.loss == "coordinate_diff":
+            R = orthogonal_procrustes(layout[0].to('cpu').detach().numpy(), predict_layout[0].to('cpu').detach().numpy())[0]
+            R = torch.from_numpy(R).unsqueeze(0).to(device)
+            layout = torch.bmm(layout, R)
+            loss = one_norm_distance(predict_layout, layout)
         
         average_val_loss += loss.item() / len(validation_loader)
         avg_val_pre_energy += predict_energy.item() / len(validation_loader)
@@ -214,12 +210,13 @@ def test(model_load_path: str=None) -> float:
         adjacency_list = torch.where(torch.triu(Adj[0]))
         predict_energy = energy(predict_layout[0], adjacency_list, N)
         truth_energy = energy(layout[0], adjacency_list, N)
-        # print("predict: ", predict_energy, " truth: ", truth_energy)
-        R = orthogonal_procrustes(layout[0].to('cpu').detach().numpy(), predict_layout[0].to('cpu').detach().numpy())[0]
-        R = torch.from_numpy(R).unsqueeze(0).to(device)
-        layout = torch.bmm(layout, R)
-        loss = one_norm_distance(predict_layout, layout)
-        # loss = torch.abs(predict_energy - truth_energy) / (N * N)
+        if args.loss == "energy":
+            loss = torch.abs(predict_energy - truth_energy) / (N * N)
+        elif args.loss == "coordinate_diff":
+            R = orthogonal_procrustes(layout[0].to('cpu').detach().numpy(), predict_layout[0].to('cpu').detach().numpy())[0]
+            R = torch.from_numpy(R).unsqueeze(0).to(device)
+            layout = torch.bmm(layout, R)
+            loss = one_norm_distance(predict_layout, layout)
         
         average_test_loss += loss.item() / len(test_loader)
         avg_test_pre_energy += predict_energy.item() / len(test_loader)
@@ -255,12 +252,13 @@ def predict(model_load_path: str=None):
         adjacency_list = torch.where(torch.triu(Adj[0]))
         predict_energy = energy(predict_layout[0], adjacency_list, N)
         truth_energy = energy(layout[0], adjacency_list, N)
-        # print("predict: ", predict_energy, " truth: ", truth_energy)
-        R = orthogonal_procrustes(layout[0].to('cpu').detach().numpy(), predict_layout[0].to('cpu').detach().numpy())[0]
-        R = torch.from_numpy(R).unsqueeze(0).to(device)
-        layout = torch.bmm(layout, R)
-        loss = one_norm_distance(predict_layout, layout)
-        # loss = torch.abs(predict_energy - truth_energy) / (N * N)
+        if args.loss == "energy":
+            loss = torch.abs(predict_energy - truth_energy) / (N * N)
+        elif args.loss == "coordinate_diff":
+            R = orthogonal_procrustes(layout[0].to('cpu').detach().numpy(), predict_layout[0].to('cpu').detach().numpy())[0]
+            R = torch.from_numpy(R).unsqueeze(0).to(device)
+            layout = torch.bmm(layout, R)
+            loss = one_norm_distance(predict_layout, layout)
         
         average_predict_loss += loss.item() / len(test_loader)
         avg_predict_pre_energy += predict_energy.item() / len(test_loader)
