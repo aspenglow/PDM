@@ -42,8 +42,12 @@ parser.add_argument('--position-encoding-dim', type=int, default=100,
                     help='Dim of graph position encoding as input feature.')
 parser.add_argument('--latent-dims', type=list, default=[100,100,100],
                     help='Number of nodes for each latent graph layer.')
-parser.add_argument('--channel-multi', type=int, default=10,
+parser.add_argument('--channel-multi', type=int, default=20,
                     help='How many multiple channels in latent space compare with visible space.')
+parser.add_argument('--mode', type=str, default="asymmetric",
+                    help='Which kind of latentGNN to use (symmetric/asymmetric).')
+parser.add_argument('--loss', type=str, default="energy",
+                    help='Which kind of loss function to use (energy/coordinate_diff).')
 parser.add_argument('--epochs', type=int, default=50,
                     help='Numer of epoch to train.')
 parser.add_argument('--gamma', type=float, default=0.9,
@@ -94,14 +98,17 @@ no_predict = args.no_predict
 data_loader, train_loader, validation_loader, test_loader = load_data(graph_root_dir, layout_root_dir, dataset_ratio, encoding_dim)
 
 # Initialize models
-model = LatentGNN(in_features=encoding_dim, out_features=3, latent_dims=latent_dims, channel_multi=channel_multi)  # 加载模型
+model = LatentGNN(in_features=encoding_dim, out_features=3, latent_dims=latent_dims, channel_multi=channel_multi, mode=args.mode)  # 加载模型
 if model_load_path is not None:
     model.load_state_dict(torch.load(model_load_path))
 model.to(device)
 
 optimizer = torch.optim.Adam(model.parameters(), lr=0.01) # 优化器
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=gamma)
-criterion = one_norm_distance
+if args.loss == "energy":
+    criterion = energy
+else:
+    criterion = one_norm_distance
 
 
 def train(epoch, best_val_loss) -> float:
@@ -122,11 +129,15 @@ def train(epoch, best_val_loss) -> float:
         predict_energy = energy(predict_layout[0], adjacency_list, N)
         truth_energy = energy(layout[0], adjacency_list, N)
         # print("predict: ", predict_energy, " truth: ", truth_energy)
-        R = orthogonal_procrustes(layout[0].to('cpu').detach().numpy(), predict_layout[0].to('cpu').detach().numpy())[0]
-        R = torch.from_numpy(R).unsqueeze(0).to(device)
-        layout = torch.bmm(layout, R)
-        loss = one_norm_distance(predict_layout, layout)
-        # loss = torch.abs(predict_energy - truth_energy) / (N * N)
+        
+        if args.loss == "energy":
+            loss = torch.abs(predict_energy - truth_energy) / (N * N)
+        elif args.loss == "coordinate_diff":
+            R = orthogonal_procrustes(layout[0].to('cpu').detach().numpy(), predict_layout[0].to('cpu').detach().numpy())[0]
+            R = torch.from_numpy(R).unsqueeze(0).to(device)
+            layout = torch.bmm(layout, R)
+            loss = one_norm_distance(predict_layout, layout)
+
         loss.backward()
         
         average_train_loss += loss.item() / len(train_loader)

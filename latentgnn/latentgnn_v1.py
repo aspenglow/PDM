@@ -177,6 +177,15 @@ class LatentGNN_Kernel(nn.Module):
                             nn.ReLU(inplace=True),
             )
 
+        self.latent_lin = nn.Sequential(
+                            nn.Linear(in_features=in_features,
+                                        out_features=in_features,
+                                        bias=False),
+                            norm_layer(in_features),
+                            nn.ReLU(inplace=True),
+            )
+
+    
         #----------------------------------------------
         # Step2: Latent Messge Passing
         #----------------------------------------------
@@ -194,8 +203,8 @@ class LatentGNN_Kernel(nn.Module):
         if self.mode == 'asymmetric':
             v2l_graph_adj = self.psi_v2l(v2l_node_feature)
             l2v_graph_adj = self.psi_l2v(l2v_node_feature)
-            v2l_graph_adj = self.norm_func(v2l_graph_adj, dim=2)
-            l2v_graph_adj = self.norm_func(l2v_graph_adj, dim=1)
+            v2l_graph_adj = self.norm_func(v2l_graph_adj.permute(0,2,1), dim=2)
+            l2v_graph_adj = self.norm_func(l2v_graph_adj.permute(0,2,1), dim=2)
             # l2v_graph_adj = self.norm_func(l2v_graph_adj.view(B,-1, N), dim=2)
         elif self.mode == 'symmetric':
             assert l2v_node_feature is None
@@ -214,6 +223,7 @@ class LatentGNN_Kernel(nn.Module):
         affinity_matrix = torch.bmm(latent_node_feature_n, latent_node_feature_n.permute(0,2,1))
         affinity_matrix = F.softmax(affinity_matrix, dim=-1)
 
+        latent_node_feature = self.latent_lin(latent_node_feature)
         latent_node_feature = torch.bmm(affinity_matrix, latent_node_feature)
 
         #----------------------------------------------
