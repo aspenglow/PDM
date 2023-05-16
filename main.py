@@ -38,9 +38,9 @@ parser.add_argument('--train-set-ratio', type=float, default=0.7,
                     help='Ratio of train set.')
 parser.add_argument('--val-set-ratio', type=float, default=0.2,
                     help='Ratio of validation set.')
-parser.add_argument('--position-encoding-dim', type=int, default=30,
+parser.add_argument('--position-encoding-dim', type=int, default=50,
                     help='Dim of graph position encoding as input feature.')
-parser.add_argument('--latent-dims', type=list, default=[30],
+parser.add_argument('--latent-dims', type=list, default=[2,2,2],
                     help='Number of nodes for each latent graph layer.')
 parser.add_argument('--channel-multi', type=int, default=20,
                     help='How many multiple channels in latent space compare with visible space.')
@@ -48,9 +48,9 @@ parser.add_argument('--mode', type=str, default="asymmetric",
                     help='Which kind of latentGNN to use (symmetric/asymmetric).')
 parser.add_argument('--loss', type=str, default="energy",
                     help='Which kind of loss function to use (energy/coordinate_diff).')
-parser.add_argument('--epochs', type=int, default=30,
+parser.add_argument('--epochs', type=int, default=100,
                     help='Numer of epoch to train.')
-parser.add_argument('--gamma', type=float, default=0.9,
+parser.add_argument('--gamma', type=float, default=0.97,
                     help='Parameter to decay the learning rate per epoch.')
 parser.add_argument('--only-cpu', action="store_true",
                     help='Use gpu for training.')
@@ -112,7 +112,7 @@ def train(epoch, best_val_loss) -> float:
     average_train_loss = 0.
     avg_train_pre_energy = 0.
     avg_train_tru_energy = 0.
-    for batch_idx, (Adj, feature, layout, graph_name) in tqdm(enumerate(train_loader), desc="train", total=len(train_loader), ncols=100, leave=False):
+    for batch_idx, (Adj, feature, layout, graph_name) in tqdm(enumerate(train_loader), desc="train", total=len(train_loader), ncols=80, leave=False):
         optimizer.zero_grad()
         Adj = Adj.to(device)
         N = Adj.size(1)
@@ -154,7 +154,7 @@ def train(epoch, best_val_loss) -> float:
     average_val_loss = 0.
     avg_val_pre_energy = 0.
     avg_val_tru_energy = 0.
-    for batch_idx, (Adj, feature, layout, graph_name) in tqdm(enumerate(validation_loader), desc="val", total=len(validation_loader), ncols=100, leave=False):
+    for batch_idx, (Adj, feature, layout, graph_name) in tqdm(enumerate(validation_loader), desc="val", total=len(validation_loader), ncols=80, leave=False):
         Adj = Adj.to(device)
         N = Adj.size(1)
         feature = feature.to(device)
@@ -201,7 +201,7 @@ def test(model_load_path: str=None) -> float:
     avg_test_pre_energy = 0.
     avg_test_tru_energy = 0.
     
-    for batch_idx, (Adj, feature, layout, graph_name) in tqdm(enumerate(test_loader), desc="test", total=len(test_loader), ncols=100):
+    for batch_idx, (Adj, feature, layout, graph_name) in tqdm(enumerate(test_loader), desc="test", total=len(test_loader), ncols=80):
         Adj = Adj.to(device)
         N = Adj.size(1)
         feature = feature.to(device)
@@ -243,7 +243,7 @@ def predict(model_load_path: str=None):
     for dir in dirs:
         os.makedirs(os.path.join(output_root_dir, dir), exist_ok=True)
 
-    for batch_idx, (Adj, feature, layout, graph_name) in tqdm(enumerate(data_loader), desc="predict", total=len(data_loader), ncols=100):
+    for batch_idx, (Adj, feature, layout, graph_name) in tqdm(enumerate(data_loader), desc="predict", total=len(data_loader), ncols=80):
         Adj = Adj.to(device)
         N = Adj.size(1)
         feature = feature.to(device)
@@ -260,9 +260,9 @@ def predict(model_load_path: str=None):
             layout = torch.bmm(layout, R)
             loss = one_norm_distance(predict_layout, layout)
         
-        average_predict_loss += loss.item() / len(test_loader)
-        avg_predict_pre_energy += predict_energy.item() / len(test_loader)
-        avg_predict_tru_energy += truth_energy.item() / len(test_loader)
+        average_predict_loss += loss.item() / len(data_loader)
+        avg_predict_pre_energy += predict_energy.item() / len(data_loader)
+        avg_predict_tru_energy += truth_energy.item() / len(data_loader)
         
         graph_name: str = graph_name[0]
         if graph_name.startswith("er"):
@@ -272,14 +272,13 @@ def predict(model_load_path: str=None):
 
         log_string = " graph "+str(batch_idx)+" "+graph_name+" N_nodes: "+str(N)+" loss: "+ str(loss.item()) + " p_energy: " + str(predict_energy.item()) + " t_energy: " + str(truth_energy.item())
         write_log(os.path.join(log_dir, "predict_log.txt"), log_string + "\n")
-        print(log_string)
     
     
     log_string = "average loss: "+str(average_predict_loss)+" avg pre energy: "+str(avg_predict_pre_energy)+" avg truth energy: "+str(avg_predict_tru_energy)    
     write_log(os.path.join(log_dir, "predict_log.txt"), log_string+"\n\n")    
+    print(log_string)
 
 def main():
-    print(no_train, no_test, no_predict)
     if not no_train:
         best_val_loss = np.inf
         best_epoch = -1
