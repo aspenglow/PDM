@@ -10,8 +10,8 @@ def parse_args():
     parse = argparse.ArgumentParser(description='Generate random graphs.')
     parse.add_argument('--save-dir-er', type=str, default='graphs/erdos_renyi', help='Save dir of ER graph.')
     parse.add_argument('--save-dir-sbm', type=str, default='graphs/sbm', help='Save dir of sbm graph.')
-    parse.add_argument('--num-er', type=int, default=500, help='Number of ER graph.')
-    parse.add_argument('--num-sbm', type=int, default=500, help='Number of SBM graph.')
+    parse.add_argument('--num-er', type=int, default=0, help='Number of ER graph.')
+    parse.add_argument('--num-sbm', type=int, default=1000, help='Number of SBM graph.')
     parse.add_argument('--index-start-at-er', type=int, default=1, help='Start index of ER graph.')
     parse.add_argument('--index-start-at-sbm', type=int, default=1, help='Start index of sbm graph.')
     args = parse.parse_args()
@@ -29,7 +29,7 @@ def generate_erdos_renyi_graph(save_dir='graphs/erdos_renyi', num_graphs=500, in
     if num_graphs == 1:
         return g
         
-def generate_sbm_graph(save_dir='graphs/sbm', num_graphs=500, index_start_at=1, num_blocks=2, node_range=[50,500], p_in=0.2, p_betw=0.02):
+def generate_sbm_graph(save_dir='graphs/sbm', num_graphs=500, index_start_at=1, num_blocks=2, node_range=[30,100], p_in=0.2, p_betw=0.01):
     os.makedirs(save_dir, exist_ok=True)
     for i in tqdm(range(index_start_at, index_start_at+num_graphs)):
         probs = p_betw * np.ones((num_blocks, num_blocks))
