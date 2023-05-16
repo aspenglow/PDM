@@ -18,13 +18,13 @@ from neulay.neulay_model import *
 import argparse
 parser = argparse.ArgumentParser(
     'Force-Directed Layout algorithm to calculate final layout given a graph.')
-parser.add_argument('--data-dir', type=str, default="graphs/erdos_renyi",
+parser.add_argument('--data-dir', type=str, default="graphs_sbm/sbm",
                     help='Path to load graphs.')
 parser.add_argument('--graphs-num', type=int, default=-1,
                     help='Number of graph to train. -1 means load all of graphs in data-dir.')
 parser.add_argument('--graphs-start-at', type=int, default=1,
                     help='From which picture to start training.')
-parser.add_argument('--layout-dir', type=str, default="layouts/erdos_renyi",
+parser.add_argument('--layout-dir', type=str, default="layouts_sbm/sbm",
                     help='Path to save trained graph layouts.')
 parser.add_argument('--layout_dim', type=int, default=3,
                     help='Dimension of graph layout.')
@@ -32,19 +32,19 @@ parser.add_argument('--log-path', type=str, default="neulay/log_neulay.txt",
                     help='Path to save training log.')
 parser.add_argument('--csv-dir', type=str, default=None,
                     help='Path to save results of loss and time.')
-parser.add_argument('--train-num', type=int, default=5,
+parser.add_argument('--train-num', type=int, default=3,
                     help='Number of training per graph, then save the layout with lowest loss.')
 parser.add_argument('--stop-delta-ratio', type=float, default=1e-4,
                     help='A parameter to early stop the training.')
-parser.add_argument('--use-gpu', type=bool, default=True,
-                    help='Use gpu to  training.')
+parser.add_argument('--only-cpu', action="store_true",
+                    help='Use gpu for training.')
 args = parser.parse_args()
 
-if args.use_gpu:
+if args.only_cpu:
+    device = 'cpu'
+else:
     os.environ["CUDA_VISIBLE_DEVICES"] = "0"
     device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-else:
-    device = 'cpu'
   
 # measure time
 tt = tictoc()
@@ -214,6 +214,9 @@ for f in tqdm(files, leave=False):
             write_log(log_path, "Better result with energy: " + str(energy_hist[-1]) + "\n")
             lowest_energy = energy_hist[-1]
             best_outputs = outputs1
+    
+    # Remove mean, make center of nodes as zero point.
+    best_outputs = best_outputs - torch.mean(best_outputs, axis=0)
     
     write_log(log_path, "\n")    
     graph_name = f.split('.')[0]
