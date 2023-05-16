@@ -53,6 +53,8 @@ class LayoutDataset(Dataset):
             Adj_norm = Adj_norm.float()
             
             layout = torch.load(layout_path)
+            # remove mean
+            layout = layout - torch.mean(layout, axis=0)
             return Adj_norm, encoding, layout, graph_name
         except EOFError:
             raise EOFError(str(index)+" "+graph_path+" "+layout_path)
