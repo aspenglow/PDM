@@ -1,11 +1,11 @@
-graphs/
+graphs*/
 *.csv
 */__*
 .vscode
 *.txt
-layouts/
-outputs/
+layouts*/
+outputs*/
 __pycache__
-log
+log*/
 *.pt
 *.ipynb
