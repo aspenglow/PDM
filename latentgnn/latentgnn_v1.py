@@ -57,13 +57,13 @@ class LatentGNN(nn.Module):
             self.down_channel_v2l = nn.Sequential(
                                     nn.Linear(in_features=in_features, 
                                             out_features=latent_channel, bias=False),
-                                    norm_layer(latent_channel).to(self.device),
+                                    # norm_layer(latent_channel).to(self.device),
             ).to(self.device)
 
             self.down_channel_l2v = nn.Sequential(
                                     nn.Linear(in_features=in_features, 
                                             out_features=latent_channel, bias=False),
-                                    norm_layer(latent_channel).to(self.device),
+                                    # norm_layer(latent_channel).to(self.device),
             ).to(self.device)
 
         elif mode == 'symmetric':   
@@ -71,7 +71,7 @@ class LatentGNN(nn.Module):
                                     nn.Linear(in_features=in_features, 
                                             out_features=latent_channel,
                                             bias=False),
-                                    norm_layer(latent_channel).to(self.device),
+                                    # norm_layer(latent_channel).to(self.device),
             ).to(self.device)
 
             # nn.init.kaiming_uniform_(self.down_channel[0].weight, a=1)
@@ -86,6 +86,7 @@ class LatentGNN(nn.Module):
             self.add_module('LatentGNN_Kernel_{}'.format(i), 
                                 LatentGNN_Kernel(in_features=latent_channel, 
                                                 latent_dim=latent_dims[i],
+                                                visible_GCN_nums=self.visible_GCN_nums,
                                                 norm_layer=norm_layer,
                                                 norm_func=norm_func,
                                                 mode=mode,
@@ -103,30 +104,26 @@ class LatentGNN(nn.Module):
     
     def forward(self, Adj, node_feature):
         # Adj: adjacency matrix of input graph
-        # message passing in visible space
-        for i in range(self.visible_GCN_nums[0]):
-            node_feature = torch.bmm(Adj, node_feature)
         
         # Generate visible space feature 
         if self.mode == 'asymmetric':
             v2l_node_feature = self.down_channel_v2l(node_feature)
             l2v_node_feature = self.down_channel_l2v(node_feature)
-            v2l_node_feature = self.norm_func(v2l_node_feature, dim=2)
-            l2v_node_feature = self.norm_func(l2v_node_feature, dim=2)
+            # v2l_node_feature = self.norm_func(v2l_node_feature, dim=2)
+            # l2v_node_feature = self.norm_func(l2v_node_feature, dim=2)
         elif self.mode == 'symmetric':
-            v2l_node_feature = self.norm_func(self.down_channel(node_feature), dim=2)
+            # v2l_node_feature = self.norm_func(self.down_channel(node_feature), dim=2)
             l2v_node_feature = None
         out_features = []
         for i in range(self.num_kernels):
-            out_features.append(eval('self.LatentGNN_Kernel_{}'.format(i))(v2l_node_feature, l2v_node_feature))
+            out_features.append(eval('self.LatentGNN_Kernel_{}'.format(i))(v2l_node_feature, l2v_node_feature, Adj))
         
         out_features = torch.cat(out_features, dim=2) if self.num_kernels > 1 else out_features[0]
         
-        # message passing in visible space
-        for i in range(self.visible_GCN_nums[1]):
-            out_features = torch.bmm(Adj, out_features)
-        
         out_features = self.up_channel(out_features)
+
+        # remove mean
+        out_features = out_features - torch.mean(out_features, axis=1)
 
         if self.without_resisual:
             return out_features
@@ -141,21 +138,35 @@ class LatentGNN_Kernel(nn.Module):
 
     """
     def __init__(self, in_features, 
-                        latent_dim, norm_layer,
+                        latent_dim, norm_layer, visible_GCN_nums,
                         norm_func, mode, graph_conv_flag):
         super(LatentGNN_Kernel, self).__init__()
         self.mode = mode
         self.norm_func = norm_func
+        self.visible_GCN_nums = visible_GCN_nums
+        
+        for i in range(self.visible_GCN_nums[0]):
+            self.add_module('visible_lin_before_{}'.format(i), 
+                                nn.Linear(in_features=in_features,
+                                        out_features=in_features,
+                                        bias=False))
+        for i in range(self.visible_GCN_nums[1]):
+            self.add_module('visible_lin_after_{}'.format(i), 
+                                nn.Linear(in_features=in_features,
+                                        out_features=in_features,
+                                        bias=False))
+        
+        
         #----------------------------------------------
         # Step1 & 3: Visible-to-Latent & Latent-to-Visible
         #----------------------------------------------
-
+        
         if mode == 'asymmetric':
             self.psi_v2l = nn.Sequential(
                             nn.Linear(in_features=in_features,
                                         out_features=latent_dim,
                                         bias=False),
-                            norm_layer(latent_dim),
+                            # norm_layer(latent_dim),
                             nn.ReLU(inplace=True),
             )
             # nn.init.kaiming_uniform_(self.psi_v2l[0].weight, a=1)
@@ -164,7 +175,7 @@ class LatentGNN_Kernel(nn.Module):
                             nn.Linear(in_features=in_features,
                                         out_features=latent_dim,
                                         bias=False),
-                            norm_layer(latent_dim),
+                            # norm_layer(latent_dim),
                             nn.ReLU(inplace=True),
             )
 
@@ -173,7 +184,7 @@ class LatentGNN_Kernel(nn.Module):
                             nn.Linear(in_features=in_features,
                                         out_features=latent_dim,
                                         bias=False),
-                            norm_layer(latent_dim),
+                            # norm_layer(latent_dim),
                             nn.ReLU(inplace=True),
             )
 
@@ -181,7 +192,7 @@ class LatentGNN_Kernel(nn.Module):
                             nn.Linear(in_features=in_features,
                                         out_features=in_features,
                                         bias=False),
-                            norm_layer(in_features),
+                            # norm_layer(in_features),
                             nn.ReLU(inplace=True),
             )
 
@@ -193,22 +204,29 @@ class LatentGNN_Kernel(nn.Module):
         if graph_conv_flag:
             self.GraphConvWeight = nn.Sequential(
                             nn.Linear(in_features, in_features,bias=False),
-                            norm_layer(in_features),
+                            # norm_layer(in_features),
                             nn.ReLU(inplace=True),
                         )
             nn.init.normal_(self.GraphConvWeight[0].weight, std=0.01)
 
-    def forward(self, v2l_node_feature, l2v_node_feature):
+    def forward(self, v2l_node_feature, l2v_node_feature, Adj):
+        # message passing in visible space
+        for i in range(self.visible_GCN_nums[0]):
+            v2l_node_feature = eval('self.visible_lin_before_{}'.format(i))(v2l_node_feature)
+            v2l_node_feature = torch.bmm(Adj, v2l_node_feature)
+        
         # Generate Bipartite Graph Adjacency Matrix
+        
         if self.mode == 'asymmetric':
-            v2l_graph_adj = self.psi_v2l(v2l_node_feature)
-            l2v_graph_adj = self.psi_l2v(l2v_node_feature)
-            v2l_graph_adj = self.norm_func(v2l_graph_adj.permute(0,2,1), dim=2)
-            l2v_graph_adj = self.norm_func(l2v_graph_adj.permute(0,2,1), dim=2)
-            # l2v_graph_adj = self.norm_func(l2v_graph_adj.view(B,-1, N), dim=2)
+            v2l_graph_adj = self.psi_v2l(v2l_node_feature).permute(0,2,1)
+            l2v_graph_adj = self.psi_l2v(l2v_node_feature).permute(0,2,1)
+            v2l_graph_adj = F.softmax(v2l_graph_adj, dim=-1)
+            l2v_graph_adj = F.softmax(l2v_graph_adj, dim=-1)
+            # v2l_graph_adj = self.norm_func(v2l_graph_adj, dim=-1)
+            # l2v_graph_adj = self.norm_func(l2v_graph_adj, dim=-1)
         elif self.mode == 'symmetric':
             assert l2v_node_feature is None
-            l2v_graph_adj = v2l_graph_adj = self.norm_func(self.psi(v2l_node_feature).permute(0,2,1), dim=2)
+            l2v_graph_adj = v2l_graph_adj = self.norm_func(self.psi(v2l_node_feature).permute(0,2,1), dim=-1)
 
         #----------------------------------------------
         # Step1 : Visible-to-Latent 
@@ -219,7 +237,8 @@ class LatentGNN_Kernel(nn.Module):
         # Step2 : Latent-to-Latent 
         #----------------------------------------------
         # Generate Dense-connected Graph Adjacency Matrix
-        latent_node_feature_n = self.norm_func(latent_node_feature, dim=-1)
+        # latent_node_feature_n = self.norm_func(latent_node_feature, dim=-1)
+        latent_node_feature_n = latent_node_feature
         affinity_matrix = torch.bmm(latent_node_feature_n, latent_node_feature_n.permute(0,2,1))
         affinity_matrix = F.softmax(affinity_matrix, dim=-1)
 
@@ -231,6 +250,11 @@ class LatentGNN_Kernel(nn.Module):
         #----------------------------------------------
         visible_feature = torch.bmm(l2v_graph_adj.permute(0,2,1), latent_node_feature)
 
+        # message passing in visible space
+        for i in range(self.visible_GCN_nums[1]):
+            visible_feature = eval('self.visible_lin_after_{}'.format(i))(visible_feature)
+            visible_feature = torch.bmm(Adj, visible_feature)
+        
         if self.graph_conv_flag:
             visible_feature = self.GraphConvWeight(visible_feature)
 
