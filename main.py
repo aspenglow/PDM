@@ -14,7 +14,7 @@ from utils.position_encoding import LapEncoding
 from utils.utils_latentgnn import edge_list_to_tensor, graph_to_edge_list
 from latentgnn.latentgnn_v1 import LatentGNN
 from utils.dataset import LayoutDataset
-from utils.utils import load_data, one_norm_distance, write_log
+from utils.utils import load_data, one_norm_distance, energy_loss, write_log
 from utils.utils_neulay import energy 
 
 
@@ -22,25 +22,25 @@ import argparse
 
 parser = argparse.ArgumentParser(
     'Train LatentGNN model to predict final layout from different graphs.')
-parser.add_argument('--graph-root-dir', type=str, default="graphs/",
+parser.add_argument('--graph-root-dir', type=str, default="graphs_sbm/",
                     help='Root path to load graphs.')
-parser.add_argument('--layout-root-dir', type=str, default="layouts/",
+parser.add_argument('--layout-root-dir', type=str, default="layouts_sbm/",
                     help='Root path to load final layouts.')
-parser.add_argument('--output-root-dir', type=str, default="outputs/",
+parser.add_argument('--output-root-dir', type=str, default="outputs_sbm/",
                     help='Root path to save predicted final layouts.')
-parser.add_argument('--model-save-dir', type=str, default="model/",
+parser.add_argument('--model-save-dir', type=str, default="model_sbm/",
                     help='Dir to save best model.')
 parser.add_argument('--model-load-path', type=str, default=None,
                     help='Path to load trainer models. "None" means train a new model. ')
-parser.add_argument('--log-dir', type=str, default="log",
+parser.add_argument('--log-dir', type=str, default="log_sbm",
                     help='Dir to save train validation and test logs.')
 parser.add_argument('--train-set-ratio', type=float, default=0.7,
                     help='Ratio of train set.')
 parser.add_argument('--val-set-ratio', type=float, default=0.2,
                     help='Ratio of validation set.')
-parser.add_argument('--position-encoding-dim', type=int, default=100,
+parser.add_argument('--position-encoding-dim', type=int, default=30,
                     help='Dim of graph position encoding as input feature.')
-parser.add_argument('--latent-dims', type=list, default=[100,100,100],
+parser.add_argument('--latent-dims', type=list, default=[30],
                     help='Number of nodes for each latent graph layer.')
 parser.add_argument('--channel-multi', type=int, default=20,
                     help='How many multiple channels in latent space compare with visible space.')
@@ -48,12 +48,12 @@ parser.add_argument('--mode', type=str, default="asymmetric",
                     help='Which kind of latentGNN to use (symmetric/asymmetric).')
 parser.add_argument('--loss', type=str, default="energy",
                     help='Which kind of loss function to use (energy/coordinate_diff).')
-parser.add_argument('--epochs', type=int, default=50,
+parser.add_argument('--epochs', type=int, default=30,
                     help='Numer of epoch to train.')
 parser.add_argument('--gamma', type=float, default=0.9,
                     help='Parameter to decay the learning rate per epoch.')
 parser.add_argument('--only-cpu', action="store_true",
-                    help='Use gpu to training.')
+                    help='Use gpu for training.')
 parser.add_argument('--no-train', action="store_true",
                     help='If train model.')
 parser.add_argument('--no-test', action="store_true",
@@ -109,7 +109,6 @@ scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=1, gamma=gamma)
 def train(epoch, best_val_loss) -> float:
     # Training
     model.train()
-    
     average_train_loss = 0.
     avg_train_pre_energy = 0.
     avg_train_tru_energy = 0.
@@ -126,7 +125,7 @@ def train(epoch, best_val_loss) -> float:
         # print("predict: ", predict_energy, " truth: ", truth_energy)
         
         if args.loss == "energy":
-            loss = torch.abs(predict_energy - truth_energy) / (N * N)
+            loss = energy_loss(predict_energy, truth_energy)
         elif args.loss == "coordinate_diff":
             R = orthogonal_procrustes(layout[0].to('cpu').detach().numpy(), predict_layout[0].to('cpu').detach().numpy())[0]
             R = torch.from_numpy(R).unsqueeze(0).to(device)
@@ -165,7 +164,7 @@ def train(epoch, best_val_loss) -> float:
         predict_energy = energy(predict_layout[0], adjacency_list, N)
         truth_energy = energy(layout[0], adjacency_list, N)
         if args.loss == "energy":
-            loss = torch.abs(predict_energy - truth_energy) / (N * N)
+            loss = energy_loss(predict_energy, truth_energy)
         elif args.loss == "coordinate_diff":
             R = orthogonal_procrustes(layout[0].to('cpu').detach().numpy(), predict_layout[0].to('cpu').detach().numpy())[0]
             R = torch.from_numpy(R).unsqueeze(0).to(device)
@@ -186,6 +185,7 @@ def train(epoch, best_val_loss) -> float:
     
     if average_val_loss < best_val_loss:
         write_log(os.path.join(log_dir, "val_log.txt"), "Better model! saving..."+"\n\n")
+        write_log(os.path.join(log_dir, "val_log_summary.txt"), "Better model! saving..."+"\n\n")
         if model_save_dir is not None:
             os.makedirs(model_save_dir, exist_ok=True)
             torch.save(model.state_dict(), os.path.join(model_save_dir, "model.pt"))
@@ -201,7 +201,7 @@ def test(model_load_path: str=None) -> float:
     avg_test_pre_energy = 0.
     avg_test_tru_energy = 0.
     
-    for batch_idx, (Adj, feature, layout, graph_name) in tqdm(enumerate(test_loader), desc="test", total=len(test_loader), ncols=100, leave=False):
+    for batch_idx, (Adj, feature, layout, graph_name) in tqdm(enumerate(test_loader), desc="test", total=len(test_loader), ncols=100):
         Adj = Adj.to(device)
         N = Adj.size(1)
         feature = feature.to(device)
@@ -211,7 +211,7 @@ def test(model_load_path: str=None) -> float:
         predict_energy = energy(predict_layout[0], adjacency_list, N)
         truth_energy = energy(layout[0], adjacency_list, N)
         if args.loss == "energy":
-            loss = torch.abs(predict_energy - truth_energy) / (N * N)
+            loss = energy_loss(predict_energy, truth_energy)
         elif args.loss == "coordinate_diff":
             R = orthogonal_procrustes(layout[0].to('cpu').detach().numpy(), predict_layout[0].to('cpu').detach().numpy())[0]
             R = torch.from_numpy(R).unsqueeze(0).to(device)
@@ -243,7 +243,7 @@ def predict(model_load_path: str=None):
     for dir in dirs:
         os.makedirs(os.path.join(output_root_dir, dir), exist_ok=True)
 
-    for batch_idx, (Adj, feature, layout, graph_name) in tqdm(enumerate(data_loader), desc="predict", total=len(data_loader), ncols=100, leave=False):
+    for batch_idx, (Adj, feature, layout, graph_name) in tqdm(enumerate(data_loader), desc="predict", total=len(data_loader), ncols=100):
         Adj = Adj.to(device)
         N = Adj.size(1)
         feature = feature.to(device)
@@ -253,7 +253,7 @@ def predict(model_load_path: str=None):
         predict_energy = energy(predict_layout[0], adjacency_list, N)
         truth_energy = energy(layout[0], adjacency_list, N)
         if args.loss == "energy":
-            loss = torch.abs(predict_energy - truth_energy) / (N * N)
+            loss = energy_loss(predict_energy, truth_energy)
         elif args.loss == "coordinate_diff":
             R = orthogonal_procrustes(layout[0].to('cpu').detach().numpy(), predict_layout[0].to('cpu').detach().numpy())[0]
             R = torch.from_numpy(R).unsqueeze(0).to(device)
@@ -272,6 +272,7 @@ def predict(model_load_path: str=None):
 
         log_string = " graph "+str(batch_idx)+" "+graph_name+" N_nodes: "+str(N)+" loss: "+ str(loss.item()) + " p_energy: " + str(predict_energy.item()) + " t_energy: " + str(truth_energy.item())
         write_log(os.path.join(log_dir, "predict_log.txt"), log_string + "\n")
+        print(log_string)
     
     
     log_string = "average loss: "+str(average_predict_loss)+" avg pre energy: "+str(avg_predict_pre_energy)+" avg truth energy: "+str(avg_predict_tru_energy)    
@@ -296,7 +297,7 @@ def main():
         print("Test average loss: ", average_test_loss)
     
     if not no_predict:
-        predict("model_energy/model.pt")
+        predict(model_load_path)
     
 if __name__ == "__main__":
     main()
