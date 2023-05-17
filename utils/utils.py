@@ -35,7 +35,7 @@ def one_norm_distance(layout, prediction_layout, variance=5e-5) -> torch.Tensor:
     return neg_log_p.sum() / (N * N)
 
 def energy_loss(predict_energy, truth_energy):
-    return predict_energy / truth_energy
+    return torch.abs(predict_energy - truth_energy) / truth_energy 
 
 
 def write_log(log_path, string):
