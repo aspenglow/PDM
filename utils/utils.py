@@ -15,12 +15,27 @@ from utils.dataset import LayoutDataset
 from utils.utils_neulay import energy 
 
 
-def load_data(graph_root_dir, layout_root_dir, dataset_ratio, encoding_dim):
+def load_data(graph_root_dir, layout_root_dir, dataset_ratio, encoding_dim, re_split_dataset=False):
     dataset = LayoutDataset(graph_root_dir=graph_root_dir, layout_root_dir=layout_root_dir, encoding_dim=encoding_dim)
     train_size = int(len(dataset) * dataset_ratio[0])
     validate_size = int(len(dataset) * dataset_ratio[1])
     test_size = len(dataset) - validate_size - train_size
-    train_dataset, validate_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, validate_size, test_size])
+    
+    if re_split_dataset:
+        train_dataset, validate_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, validate_size, test_size])
+        torch.save(train_dataset, os.path.join(graph_root_dir, "train_set.pkl"))
+        torch.save(validate_dataset, os.path.join(graph_root_dir, "validate_set.pkl"))
+        torch.save(test_dataset, os.path.join(graph_root_dir, "test_set.pkl"))
+    else:
+        try:
+            train_dataset = torch.load(os.path.join(graph_root_dir, "train_set.pkl"))
+            validate_dataset = torch.load(os.path.join(graph_root_dir, "validate_set.pkl"))
+            test_dataset = torch.load(os.path.join(graph_root_dir, "test_set.pkl"))
+        except:
+            train_dataset, validate_dataset, test_dataset = torch.utils.data.random_split(dataset, [train_size, validate_size, test_size])
+            torch.save(train_dataset, os.path.join(graph_root_dir, "train_set.pkl"))
+            torch.save(validate_dataset, os.path.join(graph_root_dir, "validate_set.pkl"))
+            torch.save(test_dataset, os.path.join(graph_root_dir, "test_set.pkl"))
 
     data_loader = DataLoader(dataset, batch_size=1, shuffle=False, num_workers=0)
     train_loader = DataLoader(train_dataset, batch_size=1, shuffle=False, num_workers=0)
