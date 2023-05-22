@@ -21,12 +21,14 @@ class LayoutDataset(Dataset):
         self.layout_dirs = []
         
         for path in graph_dirs:
-            if path not in layout_dirs:
-                continue
-            self.graph_dirs.append(os.path.join(graph_root_dir, path))
-            self.layout_dirs.append(os.path.join(layout_root_dir, path))
+            if os.path.isdir(path):
+                if path not in layout_dirs:
+                    continue   
+                self.graph_dirs.append(os.path.join(graph_root_dir, path))
+                self.layout_dirs.append(os.path.join(layout_root_dir, path))
     
     def __getitem__(self, index):
+        # return (normalized adjcency matrix of the graph, position encoding, layout of the graph, graph name)
         try:
             dir_index = 0
             for graph_path in self.graph_dirs:
