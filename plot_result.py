@@ -30,9 +30,10 @@ def _format_axes(ax):
 # Create the 3D figure
 fig = plt.figure()
 
-graph_path = './graphs_sbm/sbm/sbm16.pkl'
-layout_path = "layouts_sbm/sbm/sbm16.pt"
-output_path = "outputs_sbm/sbm/sbm16.pt"
+graph_name="sbm89"
+graph_path = './graphs_sbm_2/sbm/' + graph_name + '.pkl'
+layout_path = 'layouts_sbm_2/sbm/' + graph_name + '.pt'
+output_path = 'outputs_sbm_2/sbm/' + graph_name + '.pt'
 
 G = nx.read_gpickle(graph_path)
 output = torch.load(output_path, map_location=torch.device('cpu'))[0]
