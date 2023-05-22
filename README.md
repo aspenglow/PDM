@@ -19,3 +19,9 @@ python neulay_2.py --data-dir="graphs/sbm" --layout-dir="layouts/sbm"
 ```shell
 python main.py
 ```
+
+## Notice: 
+1. split dataset will be saved in graph root dir.
+2. graph and layout directory structure: 
+    graph_root_dir -> graph_dirs -> graphs
+    layout_root_dir -> layout_dirs -> layouts
