@@ -87,6 +87,7 @@ class LatentGNN(nn.Module):
                                 LatentGNN_Kernel(in_features=latent_channel, 
                                                 latent_dim=latent_dims[i],
                                                 visible_GCN_nums=self.visible_GCN_nums,
+                                                kernel_index=i,
                                                 norm_layer=norm_layer,
                                                 norm_func=norm_func,
                                                 mode=mode,
@@ -97,7 +98,6 @@ class LatentGNN(nn.Module):
                                                 out_features=out_features, bias=False).to(self.device)
                                     
         )
-        # self.down_channel = 
 
         # Residual Connection
         self.gamma = nn.Parameter(torch.zeros(1).to(self.device))
@@ -139,9 +139,10 @@ class LatentGNN_Kernel(nn.Module):
 
     """
     def __init__(self, in_features, 
-                        latent_dim, norm_layer, visible_GCN_nums,
+                        latent_dim, norm_layer, visible_GCN_nums, kernel_index, 
                         norm_func, mode, graph_conv_flag):
         super(LatentGNN_Kernel, self).__init__()
+        self.kernel_index = kernel_index
         self.mode = mode
         self.norm_func = norm_func
         self.visible_GCN_nums = visible_GCN_nums
@@ -197,6 +198,11 @@ class LatentGNN_Kernel(nn.Module):
                             nn.ReLU(inplace=True),
             )
 
+        for i in range(self.kernel_index):
+            self.add_module('visible_lin_{}'.format(i), 
+                                nn.Linear(in_features=in_features,
+                                        out_features=in_features,
+                                        bias=False))
     
         #----------------------------------------------
         # Step2: Latent Messge Passing
@@ -253,8 +259,8 @@ class LatentGNN_Kernel(nn.Module):
         visible_feature = torch.bmm(l2v_graph_adj.permute(0,2,1), latent_node_feature)
 
         # message passing in visible space
-        for i in range(self.visible_GCN_nums[1]):
-            visible_feature = eval('self.visible_lin_after_{}'.format(i))(visible_feature)
+        for i in range(self.kernel_index):
+            visible_feature = eval('self.visible_lin_{}'.format(i))(visible_feature)
             
             visible_feature = torch.bmm(Adj, visible_feature)
         
