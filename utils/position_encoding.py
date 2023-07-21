@@ -124,15 +124,12 @@ class LapEncoding(PositionEncoding):
         self.normalization = normalization
         self.use_edge_attr = use_edge_attr
 
-    def compute_pe(self, graph) -> torch.Tensor:
-        edge_attr = graph.edge_attr if self.use_edge_attr else None
-        edge_index, edge_attr = get_laplacian(
-            graph.edge_index, edge_attr, normalization=self.normalization)
-        L = to_scipy_sparse_matrix(edge_index, edge_attr).tocsc()
-        EigVal, EigVec = np.linalg.eig(L.toarray())
-        idx = EigVal.argsort() # increasing order
-        EigVal, EigVec = EigVal[idx], np.real(EigVec[:,idx])
-        return torch.from_numpy(EigVec[:, 1:self.pos_enc_dim+1]).float()
+    def compute_pe(self, L) -> torch.Tensor:
+        EigVal, EigVec = torch.linalg.eig(L)
+        idx = torch.real(EigVal).argsort() # increasing order
+        EigVal = EigVal[idx]
+        EigVec = torch.real(EigVec[:,idx])
+        return EigVec[:, 1:self.pos_enc_dim+1].float()
 
     def apply_to(self, dataset):
         dataset.lap_pe_list = []

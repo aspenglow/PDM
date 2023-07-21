@@ -18,57 +18,69 @@ from utils.utils_neulay import *
 import argparse
 parser = argparse.ArgumentParser(
     'Force-Directed Layout algorithm to calculate final layout given a graph.')
-parser.add_argument('--data-dir', type=str, default="graphs/erdos_renyi",
+parser.add_argument('--experiment-root-dir', type=str, default="experiment_template",
+                    help='Root path for experiment.')
+parser.add_argument('--graph-dir', type=str, default="graphs/erdos_renyi",
                     help='Path to load graphs.')
 parser.add_argument('--graphs-num', type=int, default=-1,
-                    help='Number of graph to train. -1 means load all of graphs in data-dir.')
+                    help='Number of graph to train. -1 means load all of graphs in graph-dir.')
 parser.add_argument('--graphs-start-at', type=int, default=1,
                     help='From which picture to start training.')
 parser.add_argument('--layout-dir', type=str, default="layouts/erdos_renyi",
                     help='Path to save trained graph layouts.')
-parser.add_argument('--layout_dim', type=int, default=3,
+parser.add_argument('--layout_dim', type=int, default=2,
                     help='Dimension of graph layout.')
-parser.add_argument('--log-path', type=str, default="neulay/log_fdl.txt",
+parser.add_argument('--log-dir', type=str, default="log_fdl",
                     help='Path to save training log.')
 parser.add_argument('--csv-dir', type=str, default=None,
                     help='Path to save results of loss and time.')
-parser.add_argument('--train-num', type=int, default=5,
+parser.add_argument('--train-num', type=int, default=1,
                     help='Number of training per graph, then save the layout with lowest loss.')
 parser.add_argument('--stop-delta-ratio', type=float, default=1e-4,
                     help='A parameter to early stop the training.')
-parser.add_argument('--use-gpu', type=bool, default=True,
-                    help='Use gpu to  training.')
+parser.add_argument('--only-cpu', action="store_true",
+                    help='Use gpu for training.')
 args = parser.parse_args()
 
-if args.use_gpu:
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-    device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
-else:
+if args.only_cpu:
     device = 'cpu'
+else:
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    device=torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')    
     
 # measure time
 tt = tictoc()
 
+experiment_root_dir = args.experiment_root_dir
+
 # log path
-log_path = args.log_path
+log_dir = args.log_dir
+log_dir = os.path.join(experiment_root_dir, log_dir)
+os.makedirs(log_dir, exist_ok=True)
+log_path = os.path.join(log_dir, "log_fdl.txt")
+
+if args.csv_dir is not None:
+    csv_dir = os.path.join(experiment_root_dir, args.csv_dir)
+else:
+    csv_dir = None
 
 # layout save dir
-layout_dir = args.layout_dir 
+layout_dir = os.path.join(experiment_root_dir, args.layout_dir)
 if layout_dir is not None:
     os.makedirs(layout_dir, exist_ok=True)
 
 # introduce graphs
-data_dir = args.data_dir
+graph_dir = os.path.join(experiment_root_dir, args.graph_dir)
 graphs_start_at = args.graphs_start_at
 graphs_num = args.graphs_num
-files = os.listdir(data_dir)
+files = os.listdir(graph_dir)
 if graphs_start_at > 1:
     files = files[graphs_start_at-1:]
 if graphs_num > -1:
     files = files[:graphs_num]
 
 for f in tqdm(files, leave=False):
-    G = nx.read_gpickle(os.path.join(data_dir, f))
+    G = nx.read_gpickle(os.path.join(graph_dir, f))
     A = nx.to_numpy_matrix(G)
     N = len(A)
     A = sp.coo_matrix(A) #sparsification of A

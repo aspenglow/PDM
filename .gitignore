@@ -10,3 +10,5 @@ log*/
 *.pt
 *.ipynb
 *.pkl
+*.out
+z_*/

@@ -53,8 +53,8 @@ def energy(output, adjacency_list, N):
     X2 = X[adjacency_list[1]] 
 
     radius = .4
-    magnitude = 100*N**(1/3)*radius
-    k = 1
+    magnitude = N**(1/3)*radius
+    k = 100
         
     V_el = (k/2)*torch.sum( torch.sum((X1-X2)**2, axis = -1))
     r = X[...,np.newaxis,:] - X[...,np.newaxis,:,:]

@@ -1,14 +1,6 @@
 #!/usr/bin/env python
 # -*- encoding: utf-8 -*-
-'''
-@File    :   latentgnn_v1.py
-@Time    :   2019/05/27 13:39:43
-@Author  :   Songyang Zhang 
-@Version :   1.0
-@Contact :   sy.zhangbuaa@hotmail.com
-@License :   (C)Copyright 2019-2020, PLUS Group@ShanhaiTech University
-@Desc    :   None
-'''
+
 
 import torch
 import torch.nn as nn 
@@ -145,6 +137,7 @@ class LatentGNN_Kernel(nn.Module):
         self.kernel_index = kernel_index
         self.mode = mode
         self.norm_func = norm_func
+        self.tanh = nn.Tanh()
         self.visible_GCN_nums = visible_GCN_nums
         
         for i in range(self.visible_GCN_nums[0]):
@@ -252,6 +245,7 @@ class LatentGNN_Kernel(nn.Module):
         # GCN
         latent_node_feature = self.latent_lin(latent_node_feature)
         latent_node_feature = torch.bmm(affinity_matrix, latent_node_feature)
+        latent_node_feature = self.tanh(latent_node_feature)
 
         #----------------------------------------------
         # Step3: Latent-to-Visible 
@@ -263,6 +257,7 @@ class LatentGNN_Kernel(nn.Module):
             visible_feature = eval('self.visible_lin_{}'.format(i))(visible_feature)
             
             visible_feature = torch.bmm(Adj, visible_feature)
+            visible_feature = self.tanh(visible_feature)
         
         if self.graph_conv_flag:
             visible_feature = self.GraphConvWeight(visible_feature)

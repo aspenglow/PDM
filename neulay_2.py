@@ -18,17 +18,19 @@ from neulay.neulay_model import *
 import argparse
 parser = argparse.ArgumentParser(
     'Force-Directed Layout algorithm to calculate final layout given a graph.')
-parser.add_argument('--data-dir', type=str, default="graphs_sbm/sbm",
+parser.add_argument('--experiment-root-dir', type=str, default="experiment_template",
+                    help='Root path for experiment.')
+parser.add_argument('--graph-dir', type=str, default="graphs_sbm_3/sbm",
                     help='Path to load graphs.')
 parser.add_argument('--graphs-num', type=int, default=-1,
                     help='Number of graph to train. -1 means load all of graphs in data-dir.')
 parser.add_argument('--graphs-start-at', type=int, default=1,
                     help='From which picture to start training.')
-parser.add_argument('--layout-dir', type=str, default="layouts_sbm/sbm",
+parser.add_argument('--layout-dir', type=str, default="layouts_sbm_3/sbm",
                     help='Path to save trained graph layouts.')
-parser.add_argument('--layout_dim', type=int, default=3,
+parser.add_argument('--layout-dim', type=int, default=2,
                     help='Dimension of graph layout.')
-parser.add_argument('--log-path', type=str, default="neulay/log_neulay.txt",
+parser.add_argument('--log-dir', type=str, default="log_neulay",
                     help='Path to save training log.')
 parser.add_argument('--csv-dir', type=str, default=None,
                     help='Path to save results of loss and time.')
@@ -49,26 +51,48 @@ else:
 # measure time
 tt = tictoc()
 
-# log path
-log_path = args.log_path
+experiment_root_dir = args.experiment_root_dir
 
+# log path
+log_dir = os.path.join(experiment_root_dir, args.log_dir)
+os.makedirs(log_dir, exist_ok=True)
+log_path = os.path.join(log_dir, "log_neulay.txt")
+
+if args.csv_dir is not None:
+    csv_dir = os.path.join(experiment_root_dir, args.csv_dir)
+else:
+    csv_dir = None
+    
 # layout save dir
-layout_dir = args.layout_dir 
+layout_dir = os.path.join(experiment_root_dir, args.layout_dir)
 if layout_dir is not None:
     os.makedirs(layout_dir, exist_ok=True)
 
 # import graphs
-data_dir = args.data_dir
+graph_dir = os.path.join(experiment_root_dir, args.graph_dir)
 graphs_start_at = args.graphs_start_at
 graphs_num = args.graphs_num
-files = os.listdir(data_dir)
+files = os.listdir(graph_dir)
 if graphs_start_at > 1:
     files = files[graphs_start_at-1:]
 if graphs_num > -1:
     files = files[:graphs_num]
     
 for f in tqdm(files, leave=False):
-    G = nx.read_gpickle(os.path.join(data_dir, f))
+    G = nx.read_gpickle(os.path.join(graph_dir, f))
+    
+    # Make laplacian position encoding
+    Adj = nx.to_numpy_matrix(G)
+    N = len(Adj)
+    Adj =  Adj + np.eye(N)  #Laplacian mtx
+    Deg = np.diag(np.array(1/np.sqrt(Adj.sum(0)))[0,:]) # degree mtx
+    Adj_norm = np.dot(Deg, np.dot(Adj, Deg))
+    Adj_norm = torch.from_numpy(Adj_norm)
+    Adj_norm = Adj_norm.float()
+    L = torch.eye(N) - Adj_norm[0]
+    G.Adj = Adj_norm
+    
+    
     A = nx.to_numpy_matrix(G)
     N = len(A)
 
@@ -78,7 +102,6 @@ for f in tqdm(files, leave=False):
     #adjacency_list = torch.where(torch.triu(torch.tensor(A)))
 
     #propagation rule
-
     #Adj =  A + np.eye(N)  #Laplacian mtx
     #deg = np.diag(np.array(1/np.sqrt(Adj.sum(0)))[0,:]) # degree mtx
     #DAD = np.dot(deg, np.dot(Adj, deg))
@@ -120,8 +143,8 @@ for f in tqdm(files, leave=False):
     output_ = []
 
 
-    for i in tqdm(range(args.train_num), leave=False):
-        net = LayoutNet(num_nodes=N, output_dim=layout_dim, hidden_dim_1=100, hidden_dim_2=100, hidden_dim_3=3, adj_mtx= DAD)
+    for i in range(args.train_num):
+        net = LayoutNet(num_nodes=N, output_dim=layout_dim, hidden_dim_1=100, hidden_dim_2=100, hidden_dim_3=layout_dim, adj_mtx= DAD)
         net.to(device)
         
         net.apply(init_weights)
@@ -141,7 +164,7 @@ for f in tqdm(files, leave=False):
     
         tt.tic()
             
-        for epoch in tqdm(range(40000), leave=False): 
+        for epoch in range(40000): 
             inp = x.to(device)
             optimizer.zero_grad()
             outputs = net(inp)
@@ -175,7 +198,7 @@ for f in tqdm(files, leave=False):
         net1 = LayoutLinear(w)
         optimizer1 = torch.optim.RMSprop(net1.parameters(), lr=0.01)
             
-        for epoch1 in tqdm(range(epoch, 60000), leave=False): #60k
+        for epoch1 in range(epoch, 60000): #60k
             inp = x.to(device)
         
             optimizer1.zero_grad()
@@ -217,24 +240,27 @@ for f in tqdm(files, leave=False):
     
     # Remove mean, make center of nodes as zero point.
     best_outputs = best_outputs - torch.mean(best_outputs, axis=0)
+    G.layout = best_outputs
     
     write_log(log_path, "\n")    
     graph_name = f.split('.')[0]
     if layout_dir is not None:
         torch.save(best_outputs, os.path.join(layout_dir, graph_name + '.pt'))
+        
+    
             
-    if args.csv_dir is not None:    
+    if csv_dir is not None:    
         d = pd.DataFrame(energy_hist)
-        d.to_csv(os.path.join(args.csv_dir, graph_name + '_energy_neulay.csv'), header=True,index=False)
+        d.to_csv(os.path.join(csv_dir, graph_name + '_energy_neulay.csv'), header=True,index=False)
 
         d = pd.DataFrame(time_hist)
-        d.to_csv(os.path.join(args.csv_dir, graph_name + '_time_neulay.csv'), header=True,index=False)
+        d.to_csv(os.path.join(csv_dir, graph_name + '_time_neulay.csv'), header=True,index=False)
 
         d = pd.DataFrame(hist)
-        d.to_csv(os.path.join(args.csv_dir, graph_name + '_loss_neulay.csv'), header=True,index=False)
+        d.to_csv(os.path.join(csv_dir, graph_name + '_loss_neulay.csv'), header=True,index=False)
 
         d = pd.DataFrame(best_outputs.detach().cpu().numpy())
-        d.to_csv(os.path.join(args.csv_dir, graph_name + '_output_neulay.csv'), header=True,index=False)
+        d.to_csv(os.path.join(csv_dir, graph_name + '_output_neulay.csv'), header=True,index=False)
 
 
 
